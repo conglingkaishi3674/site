@@ -3732,7 +3732,15 @@ function renderReview(data, name){
       {from:px(m.lastPen.from),to:px(m.lastPen.to)}));
   if(m.lastDiv) concl.push(_cgdPick(m.lastDiv.type==="bot"?S.divBot:S.divTop,seed));
   const conclHead = "<b>"+esc(name||"该标的")+"：</b>"+rate.key+"格局。";
-  const conclBody = concl.join("")+" 综合评分 <b>"+sc.score+"</b>（范围为 <b>-8.5 ~ +8.5</b>；"+rate.desc+"）。";
+  /* 评分展示归一化到 ±10：内部计分极值是 ±8.5（trend±2 + MACD±1.5 + 背离±1.5 + 笔±1
+     + 九转±1 + 位置/柱/量比各±0.5），但 ±8.5 这种数字读起来别扭，档位阈值也是按内部
+     标尺校准好的 —— 动权重会连锁改档、还会和人格文件里的 ratings 对不上，
+     所以只在展示层等比放大到 ±10，构成明细同步换算，加起来仍等于显示分。 */
+  const RAW_MAX=8.5, SPAN=10;
+  const norm=v=>+(v/RAW_MAX*SPAN).toFixed(1);
+  const normWhy=s=>String(s).replace(/<b>([+-]\d+(?:\.\d+)?)<\/b>/g,(m,n)=>"<b>"+(n>0?"+":"")+norm(+n)+"</b>");
+  const conclBody = concl.join("")+" 综合评分 <b>"+(sc.score>0?"+":"")+norm(sc.score)+"</b>"
+    +"（范围 <b>-10 ~ +10</b>；"+rate.desc+"）。";
 
   /* --- 模块 2：位置与关键价位 --- */
   const kv=[["现价",px(m.close)+" <span style='font-size:11px'>("+pct(m.chg)+")</span>"],
@@ -3834,7 +3842,7 @@ function renderReview(data, name){
     +'<div style="margin-bottom:6px"><b style="color:#e9ebef">有持仓</b><ul>'+hold.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>'
     +'<div><b style="color:#e9ebef">未持仓</b><ul>'+cash.map(x=>"<li>"+x+"</li>").join("")+'</ul></div></div>';
   if(risk.length) h+='<div class="ai-sec ai-risk"><h4>⚠️ 风险提示</h4><ul>'+risk.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
-  h+='<div style="margin-top:10px;color:#a5abb4;font-size:11px">评分构成：'+sc.why.join("　")+'</div>';
+  h+='<div style="margin-top:10px;color:#a5abb4;font-size:11px">评分构成（±10 制）：'+normWhy(sc.why.join("　"))+'</div>';
   box.innerHTML=h;
   st.textContent="已生成 · 数据源 "+(reviewSrc||"缓存");
 }
