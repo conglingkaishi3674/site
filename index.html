@@ -3562,14 +3562,14 @@ const markPoint = (stockCfg.chan && chan.points.length)? {
   if(!_klineInst.__rs){ _klineInst.__rs=1; window.addEventListener('resize',()=>_klineInst&&_klineInst.resize()); }
 }
 
-/* ==================== chatgyd AI 点评引擎 ====================
+/* ==================== AI 点评引擎 ====================
    设计要点：
    · 人格 / 阈值 / 话术全部来自外部人格文件（公开版未启用，使用内置通用人格）
      → 公开版使用内置通用人格，未加载任何外部人格文件。
    · 引擎本身只做「把当前这张图算成硬指标」，再由人格把数字翻译成人话。
    · 任何判断都必须挂具体数字；任何结论都必须配风险；不给最终买卖指令。   */
 const CGD_DEFAULT={
-  meta:{version:"builtin",updated:"—",name:"chatgyd",emoji:"📊",note:"内置简约人格（通用版）。"},
+  meta:{version:"builtin",updated:"—",name:"AI",emoji:"📊",note:"内置简约人格（通用版）。"},
   style:{opener:"",tone:"",rules:[],forbidden:[]},
   thresholds:{maDevWarn:8,maDevExtreme:15,volRatioQuiet:.8,volRatioHot:1.5,atrPctWide:3.5,atrPctNarrow:1.5,posHigh:80,posLow:20,tdNear:7,tdDone:9},
   ratings:[{min:2.5,key:"强势多头",color:"#ff4d68",desc:"趋势·结构·量能共振"},{min:1,key:"偏多",color:"#ff8fa1",desc:"多头占优但有短板"},
