@@ -1262,11 +1262,13 @@ function afterLayoutChange(){
     cal.onclick=()=>{ dsel.value=dsel.value||curDay; dsel.style.display=dsel.style.display==="none"?"":"none"; if(dsel.style.display==="") dsel.focus(); };
     dsel.onchange=()=>{ curDay=dsel.value||todayStr(); load("chat",true); load("cmt",true); };
   }
-  /* 切 tab 时拉当前类型；之后每 15 秒轮询一次（页面不可见时不轮询） */
+  /* 切 tab 时拉当前类型；之后每 30 秒轮询一次（页面不可见时不轮询）。
+     ⚠ 轮询频率直接决定 Workers 请求量：免费档 10 万请求/天，15 秒一次只能撑几十人同时在线，
+     30 秒一次翻倍、且聊天延迟 30 秒完全可接受。要提到 10 秒级得上 WebSocket（Durable Objects）。 */
   const seg=document.getElementById("railSeg");
   if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ curKind=b.dataset.r; load(curKind,true); }));
   load("chat",true); load("cmt",true);
-  setInterval(()=>{ if(document.hidden) return; load(curKind,false); },15000);
+  setInterval(()=>{ if(document.hidden) return; load(curKind,false); },30000);
 })();
 
 function dispatchRefresh(){
