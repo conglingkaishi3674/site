@@ -1059,7 +1059,15 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>{
   onTabActivate(b.dataset.tab);
 });
 document.getElementById("kindBtn").onclick=()=>{CFG.industry=!CFG.industry;HISTORY.length=0;refresh();};
-document.getElementById("refreshBtn").onclick=()=>{dispatchRefresh();};
+/* ↻ 手动刷新 = 全量刷新：所有模块各刷一遍，且「下次刷新」倒计时重置。
+   旧行为只刷当前模块、倒计时也不动——非资金流页时 nextAt 停在过期值，看着像坏了。 */
+document.getElementById("refreshBtn").onclick=()=>{
+  const at=activeTab();
+  dispatchRefresh();                                    // 当前模块按模式刷（内部有自己的 busy 防抖）
+  if(at!=="flow" && !busy) refresh();                   // 板块资金流后台也刷（成功后同样会校准 nextAt）
+  if(at!=="watch" && WATCH && WATCH.length) refreshWatch();
+  if(!busy) nextAt=Date.now()+flowIntervalSec()*1000;   // 倒计时立刻重置
+};
 
 /* 主区留白同步：左留白 = 左栏宽 + 18，右留白 = 右栏宽 + 18（右栏在窄屏隐藏时按左栏宽算）。
    两侧间距始终相等 ⇒ 任一栏收起/展开后，内容都居中在两栏之间，不会偏向一侧。
