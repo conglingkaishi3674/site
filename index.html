@@ -1525,14 +1525,11 @@ function toggleStar(code){
   fetch(STAR_API+"/v1/star",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({code,uid:STAR_UID,on:PICK_STARS.has(code)})})
     .then(r=>r.json()).then(j=>{
-      if(j&&j.ok){ STAR_CNT[code]=j.count; updateStarTitle(code); }
+      if(j&&j.ok){ STAR_CNT[code]=j.count; applyStarUI();
+        /* 正按星标排序时重排，让刚点的那票按新人数归位。
+           重排会连带触发一次 syncStarCounts（防抖），但那次数字不变，不会再排 —— 不会循环。 */
+        if(pickSortBy==="star") renderPickList(pickItemsAll); }
     }).catch(()=>{});
-}
-function updateStarTitle(code){
-  const n=STAR_CNT[code]||0;
-  document.querySelectorAll('#pickList .pl-star[data-code="'+code+'"]')
-    .forEach(x=>{ x.title="标星"+(n?" · "+n+" 人":""); });
-  if(pickSortBy==="star") renderPickList(pickItemsAll);   /* 正按星标排就即时重排 */
 }
 document.getElementById("pickSort").addEventListener("click",e=>{
   const b=e.target.closest("button[data-sort]"); if(!b) return;
@@ -1579,7 +1576,10 @@ function renderPickList(items){
       +'<div class="pick-li" data-i="'+i+'">'
       /* 星标：★ 后面跟服务端统计的人数（0 人不显示数字），点一下算自己一票。
          数字放在这里而不是只在悬停提示里 —— 大家最想看的就是「多少人看好它」。 */
-      +'<span class="pl-star'+(PICK_STARS.has(s.code)?" on":"")+'" data-code="'+s.code+'" title="标星">★<b class="pl-sc"></b></span>'
+      /* ⚠ 人数必须在渲染时就写进去（STAR_CNT 现在有值就用，没有就留空等同步）。
+         早先版本是渲染后由 syncStarCounts 补写，结果一旦「按星标排序」就会
+         重排 → 清空数字 → 再补写 → 再重排，数字只闪一下就没了。 */
+      +'<span class="pl-star'+(PICK_STARS.has(s.code)?" on":"")+'" data-code="'+s.code+'" title="标星">★<b class="pl-sc">'+((STAR_CNT[s.code]>0)?String(STAR_CNT[s.code]):"")+'</b></span>'
       +'<b class="pl-name" title="'+s.name+'">'+s.name+'</b>'
       +'<span class="pl-code">'+s.code+'</span>'
       +'<div class="pl-r"><span class="pl-px '+(u?"u":"d")+'">'+px+'</span>'
@@ -1593,6 +1593,16 @@ function renderPickList(items){
   el._items=list;   /* 点击取的是排序后的序号，必须存排完的那一份 */
   syncStarCounts(); /* 拉一次星标人数（防抖 800ms），把「我标过的」和总数同步回来 */
 }
+/* 把 STAR_CNT / PICK_STARS 的当前值刷到已渲染的星星上（数字 + 点亮 + 悬停提示）。
+   渲染时数字已内联写入，这里是「数据后来才到」时的补刷入口。 */
+function applyStarUI(){
+  document.querySelectorAll("#pickList .pl-star[data-code]").forEach(el=>{
+    const c=el.dataset.code, n=STAR_CNT[c]||0;
+    const b=el.querySelector(".pl-sc"); if(b) b.textContent=n>0?String(n):"";
+    el.title="标星"+(n?" · "+n+" 人":"");
+    el.classList.toggle("on",PICK_STARS.has(c));
+  });
+}
 /* 星标人数同步：列表渲染后按当前代码集合批量查一次；连点排序也不会刷爆接口（防抖） */
 let _starTimer=null;
 function syncStarCounts(){
@@ -1603,18 +1613,18 @@ function syncStarCounts(){
     try{
       const r=await fetch(STAR_API+"/v1/star?codes="+encodeURIComponent(codes.join(","))+"&uid="+encodeURIComponent(STAR_UID),{cache:"no-store"});
       const j=await r.json(); if(!j||!j.ok) return;
-      Object.keys(j.counts||{}).forEach(c=>{ STAR_CNT[c]=j.counts[c]; });
-      (j.mine||[]).forEach(c=>PICK_STARS.add(c));
-      savePickStars();
-      document.querySelectorAll("#pickList .pl-star[data-code]").forEach(el=>{
-        const c=el.dataset.code, n=STAR_CNT[c]||0;
-        const b=el.querySelector(".pl-sc"); if(b) b.textContent=n>0?String(n):"";
-        el.title="标星"+(n?" · "+n+" 人":"");
-        el.classList.toggle("on",PICK_STARS.has(c));
+      /* 只统计「当前列表里有的代码」的变化，避免把别处的旧值当成差异反复重排 */
+      let changed=false;
+      Object.keys(j.counts||{}).forEach(c=>{
+        if(+STAR_CNT[c] !== +j.counts[c]) changed=true;
+        STAR_CNT[c]=j.counts[c];
       });
-      /* 人数拉回来之后必须按当前排序键重排一次：否则「按星标排序」在人数到达前
-         是用旧值排的，等人数同步回来顺序却不跟着变，看着像排序失效。 */
-      if(pickSortBy==="star") renderPickList(pickItemsAll);
+      (j.mine||[]).forEach(c=>{ if(!PICK_STARS.has(c)){ PICK_STARS.add(c); changed=true; } });
+      savePickStars();
+      applyStarUI();
+      /* 人数到达后按星标排序要重排一次（否则顺序与数字对不上）。
+         但只在数字真的变了时才排 —— 否则「重排 → 触发同步 → 再重排」会无限循环。 */
+      if(changed&&pickSortBy==="star") renderPickList(pickItemsAll);
     }catch(e){ }
   },800);
 }
