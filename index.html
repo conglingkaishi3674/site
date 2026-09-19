@@ -97,6 +97,18 @@
 .rail-box.on{display:flex}
 .rail-note{padding:8px 12px;font-size:11px;color:var(--muted);line-height:1.6;
   border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+/* 昵称条 + 日期选择（点 📅 才展开） */
+.rail-mine{display:flex;align-items:baseline;gap:6px;padding:6px 12px 0;font-size:12px}
+#railNick{font-weight:600;color:#e9ebef;cursor:pointer;border-bottom:1px dashed var(--muted)}
+#railNick:hover{color:#ffcc33}
+.rail-mine-tip{font-size:10px;color:var(--muted)}
+#railDate{display:none;margin:6px 12px 0;padding:6px 8px;border-radius:8px;border:1px solid var(--line);
+  background:rgba(255,255,255,.05);color:#e9ebef;font:inherit;font-size:12px}
+/* 时间分隔条：只在与上一条间隔 >5 分钟时出现（微信 / QQ 那套），没人说话就不插 */
+.rail-time{align-self:center;font-size:10px;color:var(--muted);background:rgba(255,255,255,.05);
+  border-radius:999px;padding:2px 10px;margin:2px 0}
+.rail-time.warn{color:#ffcc33;background:rgba(255,204,51,.10)}
+.rail-empty{font-size:12px;color:var(--muted);padding:8px 2px}
 .rail-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px 12px;
   display:flex;flex-direction:column;gap:9px}
 .msg{max-width:88%;padding:7px 10px;border-radius:12px;font-size:12px;line-height:1.55;word-break:break-word}
@@ -682,7 +694,8 @@
 <!-- ========== 右侧聊天 / 评论区（静态骨架，功能未接线）==========
      位置：固定贴右、上下顶满，且放在 .app 之外 —— 切换左侧模块时不会被隐藏或重绘，
      聊天记录与评论草稿不会随模块切换丢失。
-     将来接线：聊天 → WebSocket / 轮询；评论 → POST /v1/comments（先审后发）+ GET 列表。 -->
+     已接线（2026-09-19）：轮询 GET /v1/msg、发送 POST /v1/msg，kind=chat / cmt。
+     昵称存本浏览器（无账号、无注册），限流与保留期由服务端按 kind 分档。 -->
 <aside class="rail" id="rail">
   <div class="rail-head">
    <span class="seg rail-seg" id="railSeg">
@@ -693,29 +706,27 @@
    <button class="rail-toggle" id="railToggle" title="收起 / 展开聊天评论"><span class="sb-ico">»</span></button>
   </div>
 
+  <div class="rail-mine">
+   <span id="railNick" title="点击改个名字">游客</span>
+   <span class="rail-mine-tip">（点名字可改）</span>
+  </div>
+  <input type="date" id="railDate" title="翻看某一天的记录">
+
   <div class="rail-box on" id="railChat">
-   <div class="rail-note">实时聊天：上线后可在此聊盘面，消息按时间滚动，自己的消息靠右。切到「评论」再看留言，或点左上角模块都不会清空这里。</div>
-   <div class="rail-scroll" id="chatScroll">
-    <div class="msg other"><span class="who">系统</span>聊天功能尚未开通。上线后可在此实时讨论盘面。</div>
-    <div class="msg other"><span class="who">访客 · 09:41</span>这是一条示例消息，仅用于占位展示样式。</div>
-    <div class="msg me"><span class="who">我 · 09:42</span>自己的消息靠右显示，用蓝色气泡区分。</div>
-   </div>
+   <div class="rail-note">聊天室：谁都能说话，请文明发言。自己两条消息之间要隔 <b>10 秒</b>；记录只留<b>最近 7 天</b>，过期的自动清掉。自己的消息靠右显示。</div>
+   <div class="rail-scroll" id="chatScroll"></div>
    <div class="rail-input">
-    <input id="chatInput" placeholder="说点什么…（功能未上线）" disabled>
-    <button class="rail-send" id="chatSend" disabled title="功能未上线">发送</button>
+    <input id="chatInput" placeholder="聊两句…（10 秒后可再发）">
+    <button class="rail-send" id="chatSend">发送</button>
    </div>
   </div>
 
   <div class="rail-box" id="railCmt">
-   <div class="rail-note">评论区：提交后进入待审队列，管理员通过后公开。支持点赞 / 回复，管理端可一键删除。</div>
-   <div class="rail-scroll" id="cmtScroll">
-    <div class="cmt"><div class="ch"><span>访客 A</span><span>09:35</span></div><div class="cb">示例评论：先审后发，避免广告与无关内容。</div></div>
-    <div class="cmt"><div class="ch"><span>访客 B</span><span>09:38</span></div><div class="cb">示例评论二：支持点赞 / 回复，管理端可一键删除。</div></div>
-    <div class="cmt"><div class="ch"><span>访客 C</span><span>09:44</span></div><div class="cb">示例评论三：评论较长时会自动换行，不会撑破右栏宽度。</div></div>
-   </div>
+   <div class="rail-note">评论区：欢迎写下<b>有判断、有依据</b>的看法，发出即公开、不用等审核。每人 <b>10 分钟一条</b>，记录保留 <b>3 个月</b>。广告与无意义内容会被删除。</div>
+   <div class="rail-scroll" id="cmtScroll"></div>
    <div class="rail-input">
-    <input id="cmtInput" placeholder="写下你的看法…（功能未上线）" disabled>
-    <button class="rail-send" id="cmtSend" disabled title="功能未上线">发布</button>
+    <input id="cmtInput" placeholder="写下你的看法…（10 分钟后可再发）">
+    <button class="rail-send" id="cmtSend">发布</button>
    </div>
   </div>
  </aside>
@@ -1129,6 +1140,133 @@ function afterLayoutChange(){
   try{ init=localStorage.getItem(KEY)||"chat"; }catch(e){}
   apply(init,false);
   seg.querySelectorAll("button").forEach(b=>b.onclick=()=>apply(b.dataset.r,true));
+})();
+
+/* ==================== 右栏 聊天 / 评论 ====================
+   设计：
+   · 昵称存本浏览器（localStorage），首次进入随机生成一个，点名字可改 —— 不注册、
+     不登录、不存手机号邮箱，换浏览器就是另一个名字（代价：名字可被别人用，靠 IP 限流兜底）。
+   · 限流服务端兜底（chat 10 秒 / cmt 10 分钟），本地只做同样的倒计时提示，避免白等一个必然失败的请求。
+   · 时间显示走微信/QQ 那套：与上一条间隔超过 5 分钟才插一条时间分隔；没人说话就不插，
+     一直等到下一条消息出现才补时间。
+   · 日历：选日期 → 拉那天的记录并跳回开头（滚到顶部）。 */
+(function(){
+  const API="https://api.conglingkaishi3674.com";
+  const CFG={chat:{gap:10000,box:"chatScroll",input:"chatInput",btn:"chatSend"},
+             cmt:{gap:600000,box:"cmtScroll",input:"cmtInput",btn:"cmtSend"}};
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const pad=n=>String(n).padStart(2,"0");
+  const hhmm=ts=>{ const d=new Date(ts); return pad(d.getHours())+":"+pad(d.getMinutes()); };
+  const dayStr=ts=>new Date(ts+8*3600*1000).toISOString().slice(0,10);
+  const todayStr=()=>dayStr(Date.now());
+
+  /* ---- 昵称 + 本机标识 ---- */
+  const ADJ=["沉稳","机灵","安静","开怀","从容","好奇","踏实","敏锐","淡定","勤快"];
+  const ANI=["锦鲤","松鼠","海豚","山鹰","狐狸","水獭","麻雀","鲸鱼","灵猫","大雁"];
+  function randNick(){
+    const a=ADJ[Math.floor(Math.random()*ADJ.length)], b=ANI[Math.floor(Math.random()*ANI.length)];
+    return a+"的"+b+Math.floor(10+Math.random()*90);
+  }
+  let nick="游客", uid="";
+  try{
+    nick=localStorage.getItem("td_nick")||"";
+    uid=localStorage.getItem("td_uid")||"";
+    if(!nick){ nick=randNick(); localStorage.setItem("td_nick",nick); }
+    if(!uid){ uid="u"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem("td_uid",uid); }
+  }catch(e){ if(!nick) nick=randNick(); if(!uid) uid="u"+Math.random().toString(36).slice(2); }
+  const nickEl=$("railNick");
+  if(nickEl){
+    nickEl.textContent=nick;
+    nickEl.onclick=()=>{
+      const v=window.prompt("给自己起个名字（最多 16 字）", nick);
+      if(v==null) return;
+      const s=String(v).trim().slice(0,16);
+      if(!s) return;
+      nick=s; nickEl.textContent=s;
+      try{ localStorage.setItem("td_nick",s); }catch(e){}
+    };
+  }
+
+  let curDay=todayStr(), curKind="chat";
+  const state={chat:{at:0,last:0},cmt:{at:0,last:0}};   // last = 本地最近一条自己发的时间
+
+  /* ---- 渲染：5 分钟一条时间分隔 ---- */
+  function render(kind,list){
+    const c=CFG[kind]; const box=$(c.box); if(!box) return;
+    if(!list.length){ box.innerHTML='<div class="rail-empty">这一天还没有'+(kind==="chat"?"人说话":"评论")+'，你可以是第一个。</div>'; return; }
+    let h="", prev=0;
+    for(const m of list){
+      if(!prev || m.at-prev>5*60*1000){
+        const d=dayStr(m.at), label=(d===todayStr()? hhmm(m.at) : (d.slice(5)+" "+hhmm(m.at)));
+        h+='<div class="rail-time">'+esc(label)+'</div>';
+      }
+      prev=m.at;
+      if(kind==="chat"){
+        h+='<div class="msg '+(m.me?"me":"other")+'"><span class="who">'+esc(m.nick)+(m.me?" · 我":"")+' · '+hhmm(m.at)+'</span>'+esc(m.content)+'</div>';
+      }else{
+        h+='<div class="cmt"><div class="ch"><span>'+esc(m.nick)+(m.me?" · 我":"")+'</span><span>'+hhmm(m.at)+'</span></div><div class="cb">'+esc(m.content)+'</div></div>';
+      }
+    }
+    box.innerHTML=h;
+  }
+  async function load(kind,toTop){
+    const c=CFG[kind]; const box=$(c.box); if(!box) return;
+    try{
+      const r=await fetch(API+"/v1/msg?kind="+kind+"&day="+curDay,{cache:"no-store"});
+      const j=await r.json();
+      if(!j||!j.ok) throw new Error((j&&j.error)||"取不到");
+      const nearBottom = box.scrollHeight-box.scrollTop-box.clientHeight < 60;
+      render(kind,j.list||[]);
+      if(toTop) box.scrollTop=0;
+      else if(nearBottom) box.scrollTop=box.scrollHeight;
+    }catch(e){
+      box.innerHTML='<div class="rail-empty">暂时连不上（'+esc(e.message)+'），稍后自动重试。</div>';
+    }
+  }
+  async function send(kind){
+    const c=CFG[kind]; const inp=$(c.input), btn=$(c.btn); if(!inp) return;
+    const txt=String(inp.value||"").trim();
+    if(txt.length<2){ return; }
+    const wait=c.gap-(Date.now()-state[kind].last);
+    if(wait>0){ flash(kind,"还差 "+Math.ceil(wait/1000)+" 秒"); return; }
+    btn.disabled=true;
+    try{
+      const r=await fetch(API+"/v1/msg?kind="+kind,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({kind,nick,content:txt,uid})});
+      const j=await r.json();
+      if(!j||!j.ok) throw new Error((j&&j.error)||"发送失败");
+      inp.value=""; state[kind].last=Date.now(); curDay=todayStr();
+      const d=$("railDate"); if(d) d.value=curDay;
+      await load(kind,false);
+      const box=$(c.box); if(box) box.scrollTop=box.scrollHeight;
+    }catch(e){ flash(kind,e.message); }
+    finally{ btn.disabled=false; }
+  }
+  function flash(kind,msg){
+    const box=$(CFG[kind].box); if(!box) return;
+    const el=document.createElement("div"); el.className="rail-time warn"; el.textContent=msg;
+    box.appendChild(el); box.scrollTop=box.scrollHeight;
+    setTimeout(()=>{ try{ el.remove(); }catch(e){} },3000);
+  }
+
+  /* ---- 接线 ---- */
+  ["chat","cmt"].forEach(k=>{
+    const c=CFG[k], inp=$(c.input), btn=$(c.btn);
+    if(btn) btn.onclick=()=>send(k);
+    if(inp) inp.onkeydown=e=>{ if(e.key==="Enter") send(k); };
+  });
+  const cal=$("railCal"), dsel=$("railDate");
+  if(cal&&dsel){
+    cal.title="翻看某一天的记录";
+    cal.onclick=()=>{ dsel.value=dsel.value||curDay; dsel.style.display=dsel.style.display==="none"?"":"none"; if(dsel.style.display==="") dsel.focus(); };
+    dsel.onchange=()=>{ curDay=dsel.value||todayStr(); load("chat",true); load("cmt",true); };
+  }
+  /* 切 tab 时拉当前类型；之后每 15 秒轮询一次（页面不可见时不轮询） */
+  const seg=document.getElementById("railSeg");
+  if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ curKind=b.dataset.r; load(curKind,true); }));
+  load("chat",true); load("cmt",true);
+  setInterval(()=>{ if(document.hidden) return; load(curKind,false); },15000);
 })();
 
 function dispatchRefresh(){
