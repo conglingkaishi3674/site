@@ -1603,15 +1603,15 @@ function applyStarUI(){
     el.classList.toggle("on",PICK_STARS.has(c));
   });
 }
-/* 星标人数同步：列表渲染后按当前代码集合批量查一次；连点排序也不会刷爆接口（防抖） */
-let _starTimer=null;
-function syncStarCounts(){
+/* 星标人数同步：进来拉一次**全量**（所有策略、所有档位的计数一次到手），
+   之后切换策略 / 切档 / 换排序都是本地即时显示 —— 不用每切一次就等一个网络来回。
+   后台再低频刷新一次保证「别人刚点的星」也能看到。 */
+let _starTimer=null, _starBg=null, _starsLoaded=false;
+function syncStarCounts(opt){
   clearTimeout(_starTimer);
   _starTimer=setTimeout(async()=>{
-    const codes=[...((document.getElementById("pickList")._items)||[])].map(x=>x.code).filter(Boolean);
-    if(!codes.length) return;
     try{
-      const r=await fetch(STAR_API+"/v1/star?codes="+encodeURIComponent(codes.join(","))+"&uid="+encodeURIComponent(STAR_UID),{cache:"no-store"});
+      const r=await fetch(STAR_API+"/v1/star?uid="+encodeURIComponent(STAR_UID),{cache:"no-store"});
       const j=await r.json(); if(!j||!j.ok) return;
       /* 只统计「当前列表里有的代码」的变化，避免把别处的旧值当成差异反复重排 */
       let changed=false;
@@ -1625,8 +1625,13 @@ function syncStarCounts(){
       /* 人数到达后按星标排序要重排一次（否则顺序与数字对不上）。
          但只在数字真的变了时才排 —— 否则「重排 → 触发同步 → 再重排」会无限循环。 */
       if(changed&&pickSortBy==="star") renderPickList(pickItemsAll);
-    }catch(e){ }
-  },800);
+      _starsLoaded=true;
+    }    catch(e){ }
+    /* 后台低频续刷（别人新点的星也能看到）。页面切走时不打请求。
+       句柄必须存住并在下次清掉，否则每切一次选择就多留一个定时器。 */
+    clearTimeout(_starBg);
+    _starBg=setTimeout(()=>{ if(!document.hidden) syncStarCounts(); },90000);
+  }, (_starsLoaded?800:0));   /* 首次立即拉（不等 800ms），后续才防抖 */
 }
 syncPickSort();
 document.getElementById("pickList").addEventListener("click",e=>{
