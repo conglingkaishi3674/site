@@ -134,7 +134,7 @@
 .rail.collapsed .rail-toggle{flex:1 1 auto;width:auto}
 .rail.collapsed{width:58px;padding:12px 8px}
 .rail.collapsed .rail-seg,.rail.collapsed .rail-tag,.rail.collapsed .rail-box,
-.rail.collapsed .rail-cal{display:none}
+.rail.collapsed .rail-cal,.rail.collapsed .rail-mine,.rail.collapsed #railDate{display:none}
 @media(max-width:1200px) and (min-width:901px){
   .rail{display:none}
   .app{padding-right:214px !important}
@@ -1277,10 +1277,15 @@ function afterLayoutChange(){
   });
   const cal=$("railCal"), dsel=$("railDate");
   if(cal&&dsel){
-    let dOpen=false;                        /* 开关状态自己记：CSS 初始 display:none 时
-                                               style.display 读出来是 ""，拿它当状态会第一次点击反着走 */
+    let dOpen=false;
+    /* ⚠ 必须给显式值 "block"/"none"：置 "" 会回落到 CSS 的 #railDate{display:none}，
+       看起来就是"点了没反应"——这个坑已经踩过两次了 */
     cal.title="翻看某一天的记录";
-    cal.onclick=()=>{ dOpen=!dOpen; dsel.style.display=dOpen?"":"none"; if(dOpen) dsel.focus(); };
+    cal.onclick=()=>{ dOpen=!dOpen; dsel.style.display=dOpen?"block":"none";
+      if(dOpen){ dsel.value=curDay; dsel.focus();
+        /* Chrome 上把原生日历下拉也直接弹开（showPicker 需要用户手势，点击本身就是）；
+           内核旧不支持时静默跳过 —— 那种环境点输入框也能弹 */
+        try{ if(dsel.showPicker) dsel.showPicker(); }catch(e){ } } };
     dsel.onchange=()=>{ curDay=dsel.value||todayStr(); load("chat",true); load("cmt",true); };
   }
   /* 切 tab 时拉当前类型；之后每 30 秒轮询一次（页面不可见时不轮询）。
