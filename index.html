@@ -237,6 +237,9 @@
   cursor:pointer;text-align:center;transition:color .15s}
 .pick-li .pl-star:hover{color:var(--amber)}
 .pick-li .pl-star.on{color:var(--amber)}
+/* 星标后面的人数：有人点过才显示，跟着星星一起变色（已标则亮金色） */
+.pick-li .pl-star .pl-sc{font-size:10px;font-weight:600;margin-left:1px;opacity:.9;
+  font-variant-numeric:tabular-nums}
 .pick-li .pl-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick-li .pl-code{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
 /* 右侧再分三个定宽子列并全部右对齐：现价 / 涨跌幅 / 综合分 */
@@ -1241,16 +1244,34 @@ function afterLayoutChange(){
     }
     box.innerHTML=h;
   }
-  async function load(kind,toTop){
-    const c=CFG[kind]; const box=$(c.box); if(!box) return;
+  /* scroll: "top"=滚到那天开头（翻历史时）/ "bottom"=滚到最新（默认、发完言）/ null=保持原位
+     （只在用户已经贴着底部时才跟随滚到底 —— 他正在往上翻记录时不该被拽回底部）
+     opt.since/wait: 走长轮询 —— 带上已知最新时间，服务端没新消息就挂住最多 wait 秒，
+     有消息立刻返回。这样既实时又不空转：空闲时每人每 wait 秒 1 次请求。
+     返回下一次的等待毫秒数（0=立刻再挂，>0=出错退避）。 */
+  async function load(kind,scroll,opt){
+    opt=opt||{};
+    const c=CFG[kind]; const box=$(c.box); if(!box) return 0;
+    const isToday=(curDay===todayStr());
+    const since=(opt.since? (state[kind].at||0) : 0);
+    const wait=(opt.wait&&isToday)? 20 : 0;
     try{
-      const r=await fetch(API+"/v1/msg?kind="+kind+"&day="+curDay,{cache:"no-store"});
+      const r=await fetch(API+"/v1/msg?kind="+kind+"&day="+curDay+"&since="+since+"&wait="+wait,{cache:"no-store"});
       const j=await r.json();
       if(!j||!j.ok) throw new Error((j&&j.error)||"取不到");
+      if(j.unchanged){
+        /* 没新消息（服务端已挂满 wait 秒）。条数变了说明有人被管理员删掉 → 清掉 since 立刻重拉全量 */
+        if(j.n!=null&&state[kind].n!=null&&j.n!==state[kind].n){ state[kind].at=0; }
+        return 0;
+      }
+      const list=j.list||[];
+      state[kind].n=list.length;
+      if(list.length) state[kind].at=list[list.length-1].at||state[kind].at;
       const nearBottom = box.scrollHeight-box.scrollTop-box.clientHeight < 60;
-      render(kind,j.list||[]);
-      if(toTop) box.scrollTop=0;
-      else if(nearBottom) box.scrollTop=box.scrollHeight;
+      render(kind,list);
+      if(scroll==="top") box.scrollTop=0;
+      else if(scroll==="bottom"||nearBottom) box.scrollTop=box.scrollHeight;
+      return 0;
     }catch(e){
       /* 断网 / 跨域失败时不要把已有消息冲成错误页 —— 列表还在就让它在，
          只在最下面挂一句人话提示（自动轮询会重试）。
@@ -1259,6 +1280,7 @@ function afterLayoutChange(){
       const hasMsg=box.querySelector(".msg, .cmt");
       const tip='<div class="rail-empty">暂时连不上消息服务器，正在重试…</div>';
       if(!hasMsg) box.innerHTML=tip;
+      return 15000;   /* 出错退避，别原地打转把接口打毛 */
     }
   }
   async function send(kind){
@@ -1277,8 +1299,7 @@ function afterLayoutChange(){
       if(!j||!j.ok) throw new Error((j&&j.error)||"发送失败");
       inp.value=""; state[kind].last=Date.now(); curDay=todayStr();
       const d=$("railDate"); if(d) d.value=curDay;
-      await load(kind,false);
-      const box=$(c.box); if(box) box.scrollTop=box.scrollHeight;
+      await load(kind,"bottom");
     }catch(e){
       /* 同理：不要把 TypeError 的英文原文甩给用户 */
       const t=(e&&e.name==="TypeError")? "网络不通，发送失败" : String((e&&e.message)||"发送失败");
@@ -1310,15 +1331,27 @@ function afterLayoutChange(){
         /* Chrome 上把原生日历下拉也直接弹开（showPicker 需要用户手势，点击本身就是）；
            内核旧不支持时静默跳过 —— 那种环境点输入框也能弹 */
         try{ if(dsel.showPicker) dsel.showPicker(); }catch(e){ } } };
-    dsel.onchange=()=>{ curDay=dsel.value||todayStr(); load("chat",true); load("cmt",true); };
+    dsel.onchange=()=>{ curDay=dsel.value||todayStr(); load("chat","top"); load("cmt","top"); };
   }
-  /* 切 tab 时拉当前类型；之后每 30 秒轮询一次（页面不可见时不轮询）。
-     ⚠ 轮询频率直接决定 Workers 请求量：免费档 10 万请求/天，15 秒一次只能撑几十人同时在线，
-     30 秒一次翻倍、且聊天延迟 30 秒完全可接受。要提到 10 秒级得上 WebSocket（Durable Objects）。 */
+  /* 取消息用长轮询而不是固定间隔轮询：服务端没新消息就挂住最多 20 秒，有新消息立刻返回。
+     好处是两头的浪费都省掉 —— 没人说话时不产生频繁请求，有人说话时 1.5 秒内就到，
+     比「30 秒固定轮询」既更快又更省。（固定 2 秒轮询是最差方案：没人说话也在空转，人一多就雪崩。）
+     页面切到后台时彻底不请求，切回来立刻补一次。 */
   const seg=document.getElementById("railSeg");
-  if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ curKind=b.dataset.r; load(curKind,true); }));
-  load("chat",true); load("cmt",true);
-  setInterval(()=>{ if(document.hidden) return; load(curKind,false); },30000);
+  if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ curKind=b.dataset.r; load(curKind,"bottom"); }));
+  /* 进入页面就停在最新消息（以前停在最早，每次都要自己往下滚） */
+  load("chat","bottom"); load("cmt","bottom");
+  let _pollTimer=null;
+  async function pollOnce(){
+    if(document.hidden) return;                 /* 后台不请求，靠 visibilitychange 唤回 */
+    const back=await load(curKind,null,{since:true,wait:true});
+    _pollTimer=setTimeout(pollOnce,Math.max(0,back||0));
+  }
+  function pollStart(){ clearTimeout(_pollTimer); _pollTimer=setTimeout(pollOnce,1200); }
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden) clearTimeout(_pollTimer); else pollStart();
+  });
+  pollStart();
 })();
 
 /* 状态栏最右：今天几号星期几（跨天自动翻页，每分钟对一次表） */
@@ -1442,11 +1475,11 @@ const STAR_UID=(()=>{ let u="";
   try{ u=localStorage.getItem("td_uid")||""; if(!u){ u="u"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem("td_uid",u); } }
   catch(e){ u="u"+Math.random().toString(36).slice(2); }
   return u; })();
-const STAR_CNT={};                       /* code → 总人数（悬停提示用） */
-function starOf(it){
-  const sv=+((it&&it.stars)||0), lc=(it&&PICK_STARS.has(it.code))?1:0;
-  return Math.max(sv,lc);
-}
+const STAR_CNT={};                       /* code → 服务端统计的总人数 */
+/* ⚠ 排序与显示一律用服务端的总人数（STAR_CNT）。
+   本机 PICK_STARS 只是「我标没标」的 0/1，拿它参与排序等于把别人点的星全排除掉，
+   按星标排序就成了「按我自己标过的排」—— 那是本次踩过的坑。 */
+function starOf(it){ return +(it && STAR_CNT[it.code]) || 0; }
 /* 当前该渲染什么：先按档过滤，再在档内排序。
    返回 {list, g, gs, keys, multi}；pickGroup 指向的档不存在时退回第一档（换策略后仍安全） */
 function pickView(){
@@ -1544,7 +1577,9 @@ function renderPickList(items){
        尾部，长短名一混就参差不齐；拆开后代码自成一竖列） */
     return ''
       +'<div class="pick-li" data-i="'+i+'">'
-      +'<span class="pl-star'+(PICK_STARS.has(s.code)?" on":"")+'" data-code="'+s.code+'" title="标星">★</span>'
+      /* 星标：★ 后面跟服务端统计的人数（0 人不显示数字），点一下算自己一票。
+         数字放在这里而不是只在悬停提示里 —— 大家最想看的就是「多少人看好它」。 */
+      +'<span class="pl-star'+(PICK_STARS.has(s.code)?" on":"")+'" data-code="'+s.code+'" title="标星">★<b class="pl-sc"></b></span>'
       +'<b class="pl-name" title="'+s.name+'">'+s.name+'</b>'
       +'<span class="pl-code">'+s.code+'</span>'
       +'<div class="pl-r"><span class="pl-px '+(u?"u":"d")+'">'+px+'</span>'
@@ -1573,9 +1608,13 @@ function syncStarCounts(){
       savePickStars();
       document.querySelectorAll("#pickList .pl-star[data-code]").forEach(el=>{
         const c=el.dataset.code, n=STAR_CNT[c]||0;
+        const b=el.querySelector(".pl-sc"); if(b) b.textContent=n>0?String(n):"";
         el.title="标星"+(n?" · "+n+" 人":"");
         el.classList.toggle("on",PICK_STARS.has(c));
       });
+      /* 人数拉回来之后必须按当前排序键重排一次：否则「按星标排序」在人数到达前
+         是用旧值排的，等人数同步回来顺序却不跟着变，看着像排序失效。 */
+      if(pickSortBy==="star") renderPickList(pickItemsAll);
     }catch(e){ }
   },800);
 }
