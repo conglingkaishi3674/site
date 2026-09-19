@@ -428,8 +428,8 @@
   <span>状态 <b id="status">加载中…</b></span>
   <span>更新 <b id="updated">—</b>（截至 <span id="lastt">—</span>）</span>
   <span>下次刷新 <b id="countdown">—</b></span>
-  <span class="sb-contact">小红书 <b>從零开始</b>　公众号 <b>從零开始3674</b>　QQ群 <b>1126321638</b></span>
-  <span id="todayDate" style="margin-left:auto"></span>
+  <span class="sb-contact" style="margin-left:auto">小红书 <b>從零开始</b>　公众号 <b>從零开始3674</b>　QQ群 <b>1126321638</b></span>
+  <span id="todayDate"></span>
  </div>
 
 
@@ -613,7 +613,7 @@
    <div class="toolbar">
     <button class="btn" id="aiBtn">重新点评</button>
     <label class="toggle"><input type="checkbox" id="aiAuto" checked>切换标的/切换周期后自动点评</label>
-    <span style="color:#a5abb4;font-size:12px">结论由本图真实计算结果生成，人格为内置通用人格</span>
+    <span style="color:#a5abb4;font-size:12px">结论由本图真实计算结果生成，仅作参考、不构成投资建议</span>
    </div>
    <p class="panel-sub" id="aiStatus">选择标的并加载 K 线后自动生成点评。</p>
    <div id="aiBody"></div>
@@ -746,7 +746,7 @@ window.PICK_SNAPSHOT={"p1":{"asof":"20260918","items":[{"code":"600578","name":"
 </script>
 
 <!-- 公开版：已剥离本地人格文件，使用内置通用人格 -->
-<!-- 公开版：已剥离本地人格文件，使用内置通用人格 -->
+<script type="text/javascript">window.CHATGYD_PERSONA={"meta":{"name":"AI","version":"1.0","note":"内置人格。"},"style":{"opener":"直接给结论，不铺垫、不客套、不用「好问题」。","tone":"犀利务实派。像一个经验够、敢泼冷水、但真想让你赚钱的实战搭档。","rules":["结论先行：第一句就给判断，论据放后面","每条判断必须挂具体数字，不给裸结论","风险与机会同框，禁止只讲好的一面","不替用户做最终决定：给剧本、给触发条件、给概率，买不买他自己拍板","拿不准就明说「看不清」，不用模糊话术蒙过去","不用企业腔、不当应声虫、不堆术语"],"forbidden":["稳赚","无风险","必然","一定涨","放心持有"]},"thresholds":{"maDevWarn":8,"maDevExtreme":15,"volRatioQuiet":0.8,"volRatioHot":1.5,"atrPctWide":3.5,"atrPctNarrow":1.5,"posHigh":80,"posLow":20,"tdNear":7,"tdDone":9,"divLookback":120},"ratings":[{"min":2.5,"key":"强势多头","color":"#ff4d68","desc":"趋势+结构+量能三者共振"},{"min":1,"key":"偏多","color":"#ff8fa1","desc":"多头占优但有短板"},{"min":-1,"key":"中性震荡","color":"#9fb6df","desc":"多空要素互相抵消"},{"min":-2.5,"key":"偏空","color":"#5fd6b0","desc":"空头占优，反弹需验证"},{"min":-999,"key":"弱势空头","color":"#2bd67b","desc":"趋势+结构均向下"}],"say":{"trendBull":["均线多头排列（{ma}），价格站在所有短中期均线之上。","短中期均线（{ma}）全部向上且股价在上，趋势这侧没问题。"],"trendBear":["均线空头排列（{ma}），价格压在所有均线之下，反弹都还没收复中线。","均线（{ma}）全线向下，每一次反弹都在给前面的人送流动性。"],"trendMix":["均线（{ma}）绞在一起没方向，这种形态最容易来回打脸。","均线（{ma}）纠结，属于典型震荡结构，追涨杀跌都会被抽。"],"dev":["现价离 MA20 已偏离 {dev}%，{word}。"],"devWord":{"warn":"短线属偏热点位","extreme":"极端乖离，均值回归的引力很强"},"volHot":["近 5 日均量是 20 日均量的 {vr} 倍，放量{updown}。"],"volQuiet":["近 5 日均量只有 20 日均量的 {vr} 倍，{word}。"],"volWord":{"quiet":"缩量，多空都没真出手，信号含金量打折","dead":"地量，往往是变盘前夜，方向未定"},"atrWide":["日均振幅 {atr}%，波动够，做 T 有空间；同时也是一把双刃剑。"],"atrNarrow":["日均振幅只有 {atr}%，没空间，做 T 大概率是在给券商打工。"],"posHigh":["现价处在近 {win} 日区间的 {pos}% 分位（高 {hi} / 低 {lo}），位置偏高。"],"posLow":["现价处在近 {win} 日区间的 {pos}% 分位（高 {hi} / 低 {lo}），位置偏低。"],"posMid":["现价在近 {win} 日区间的 {pos}% 分位（高 {hi} / 低 {lo}），中不溜的位置。"],"tdNearUp":["九转向下第 {n} 根，还没到 9，别抢跑——差 {d} 根。"],"tdDoneUp":["九转向下走完第 9 根，这里是标准的下跌衰竭信号位。"],"tdNearDn":["九转向上第 {n} 根，离 9 还差 {d} 根，别急着猜顶。"],"tdDoneDn":["九转向上升到第 9 根，上涨动能衰竭的经典位置。"],"chanUp":["缠论最近一笔向上（{from} → {to}），结构未破。"],"chanDn":["缠论最近一笔向下（{from} → {to}），结构仍弱。"],"chanZS":["当前处于中枢区间 {lo} ~ {hi}，中枢内 = 无趋势，别按趋势做。"],"chanBuy":["缠论最近识别出 {pts}，属于结构上的买点标记。"],"chanSell":["缠论最近识别出 {pts}，属于结构上的卖点标记。"],"divTop":["MACD 顶背离：价格创新高但动能衰竭，这类位置追高的赔率不划算。"],"divBot":["MACD 底背离：价格创新低但动能没跟上，是值得留意的止跌线索。"],"macdGolden":["MACD 刚金叉，DIF {dif} / DEA {dea}，动能转折确认。"],"macdDead":["MACD 刚死叉，DIF {dif} / DEA {dea}，动能转弱。"],"riskAlways":["以上只是结构与赔率的判读，不是交易指令。距离你自己的入场逻辑差多远，你自己判断。"],"unknown":["这段行情我看不清，要素互相打架，硬给方向就是蒙。空仓也是一种仓位。"],"tOk":["振幅 {atr}% 够，T 仓有空间——但记得你的规矩：T 仓 ≤ 底仓 1/3、要有等量底仓、亏超 1.5% 立刻走，不补仓不改名。"],"tNo":["振幅 {atr}% 不到你的门槛（≥3%），这个票别做 T，大概率是在给券商打工。"],"noCore":["这是你的底仓 / 趋势仓标的，按规矩不做 T。"]},"sections":[{"key":"conclusion","title":"结论","icon":"🎯"},{"key":"position","title":"位置与关键价位","icon":"📍"},{"key":"structure","title":"结构与信号","icon":"🧱"},{"key":"scenario","title":"剧本与触发条件","icon":"🎬"},{"key":"risk","title":"风险与泼冷水","icon":"⚠️"}]};</script>
 <script>
 /* ================= 配置 ================= */
 const CFG = {
@@ -3724,7 +3724,7 @@ function renderReview(data, name){
       {from:px(m.lastPen.from),to:px(m.lastPen.to)}));
   if(m.lastDiv) concl.push(_cgdPick(m.lastDiv.type==="bot"?S.divBot:S.divTop,seed));
   const conclHead = "<b>"+esc(name||"该标的")+"：</b>"+rate.key+"格局。";
-  const conclBody = concl.join("")+" 综合评分 <b>"+sc.score+"</b>（"+rate.desc+"）。";
+  const conclBody = concl.join("")+" 综合评分 <b>"+sc.score+"</b>（范围为 <b>-8.5 ~ +8.5</b>；"+rate.desc+"）。";
 
   /* --- 模块 2：位置与关键价位 --- */
   const kv=[["现价",px(m.close)+" <span style='font-size:11px'>("+pct(m.chg)+")</span>"],
@@ -3738,68 +3738,97 @@ function renderReview(data, name){
   const posIdx = m.pos>=T.posHigh?S.posHigh : (m.pos<=T.posLow?S.posLow:S.posMid);
   const posLi  = _cgdTpl(_cgdPick(posIdx,seed),{win:m.win,pos:m.pos.toFixed(0),hi:px(m.hi),lo:px(m.lo)});
 
-  /* --- 模块 3：结构与信号 --- */
-  const struct=[posLi];
-  if(m.dev20!=null&&Math.abs(m.dev20)>=T.maDevWarn)
-    struct.push(_cgdTpl(_cgdPick(S.dev,seed),{dev:pct(Math.abs(m.dev20),1),word:_cgdPick([S.devWord&&(Math.abs(m.dev20)>=T.maDevExtreme?S.devWord.extreme:S.devWord.warn)],seed+"d")||"乖离偏大"}));
-  struct.push(_cgdTpl(_cgdPick(m.vr>=T.volRatioHot?S.volHot:S.volQuiet,seed),
-      {vr:m.vr.toFixed(2), word:(S.volWord&&(m.vr<T.volRatioQuiet*.6?S.volWord.dead:S.volWord.quiet))||""}));
-  struct.push(_cgdTpl(_cgdPick(m.atrPct>=T.atrPctWide?S.atrWide:S.atrNarrow,seed),{atr:m.atrPct.toFixed(2)}));
-  if(m.inZS&&m.chan.zs) struct.push(_cgdTpl(_cgdPick(S.chanZS,seed),{lo:px(m.chan.zs.low),hi:px(m.chan.zs.high)}));
-  if(m.tdDn>0) struct.push(_cgdTpl(_cgdPick(m.tdDn>=T.tdDone?S.tdDoneUp:(m.tdDn>=T.tdNear?S.tdNearUp:S.tdNearUp),seed),{n:m.tdDn,d:Math.max(0,T.tdDone-m.tdDn)}));
-  if(m.tdUp>0) struct.push(_cgdTpl(_cgdPick(m.tdUp>=T.tdDone?S.tdDoneDn:(m.tdUp>=T.tdNear?S.tdNearDn:S.tdNearDn),seed),{n:m.tdUp,d:Math.max(0,T.tdDone-m.tdUp)}));
-  if(m.cross&&m.crossAge<=6) struct.push(_cgdTpl(_cgdPick(m.cross==="golden"?S.macdGolden:S.macdDead,seed),{age:m.crossAge,dif:md(m.dif),dea:md(m.dea)}));
-  else struct.push("MACD 柱连续 <b>"+m.run+"</b> 根"+(m.sg>0?"红":"绿")+"，DIF "+md(m.dif)+" / DEA "+md(m.dea)+"。");
+  /* --- 模块 3：当前状态（简洁直观，一眼看懂价格在什么位置） --- */
+  const state=[];
+  state.push("价格 <b>"+px(m.close)+"</b>"+(m.chg>=0?" 涨 ":" 跌 ")+pct(Math.abs(m.chg))
+    +"，处近 60 日区间 <b>"+m.pos.toFixed(0)+"%</b> 分位"
+    +(m.dev20!=null?("，"+(m.dev20>=0?"在 MA20 上方 ":"在 MA20 下方 ")+pct(Math.abs(m.dev20),1)):"")+"。");
+  state.push(m.trend==="bull"?"均线多头排列，中期趋势向上。"
+    :m.trend==="bear"?"均线空头排列，中期趋势向下。"
+    :m.trend==="midup"?"站上 MA20 且 MA20 向上，中期结构转多。"
+    :m.trend==="middn"?"压在 MA20 下方且 MA20 向下，中期结构偏空。"
+    :"均线纠缠，中期方向未定。");
+  state.push("量能："+(m.vr>=T.volRatioHot?"活跃，量比 "+m.vr.toFixed(2)
+    :(m.vr<T.volRatioQuiet?"地量，量比 "+m.vr.toFixed(2)+"，没人接也没人砸":"常态，量比 "+m.vr.toFixed(2)))+"。");
+  if(m.inZS&&m.chan.zs) state.push("缠论：价格在中枢 <b>"+px(m.chan.zs.low)+" ~ "+px(m.chan.zs.high)+"</b> 之内，中枢里没有趋势。");
+  else if(m.lastPen) state.push("缠论：最近一笔"+(m.lastPen.dir==="up"?"向上":"向下")+"，<b>"+px(m.lastPen.from)+" → "+px(m.lastPen.to)+"</b>。");
+  else if(m.chan.zs) state.push("缠论：最近中枢 <b>"+px(m.chan.zs.low)+" ~ "+px(m.chan.zs.high)+"</b>，价格已离开中枢。");
+  if(m.cross&&m.crossAge<=6) state.push("MACD："+(m.cross==="golden"?"金叉":"死叉")+"距今 "+m.crossAge+" 根，方向新鲜。");
+  else state.push("MACD 柱连续 <b>"+m.run+"</b> 根"+(m.sg>0?"红":"绿")+"。");
+  if(m.tdDn>0||m.tdUp>0) state.push("九转："+(m.tdUp>0?"上升第 "+m.tdUp+" 根":"下降第 "+m.tdDn+" 根")
+    +(Math.max(m.tdUp,m.tdDn)>=T.tdDone?"，已到信号位。":"，过程值、未到 9。"));
+  if(m.lastDiv) state.push(m.lastDiv.type==="bot"?"出现<b>底背离</b>——下跌动能在衰减。":"出现<b>顶背离</b>——上涨动能在衰减。");
   if(m.recentPts.length){
     const bs=m.recentPts.filter(p=>p.type.indexOf("B")===0), ss=m.recentPts.filter(p=>p.type.indexOf("S")===0);
-    if(bs.length) struct.push(_cgdTpl(_cgdPick(S.chanBuy,seed),{pts:bs.map(p=>p.type+"@"+px(p.p)).join("、")}));
-    if(ss.length) struct.push(_cgdTpl(_cgdPick(S.chanSell,seed),{pts:ss.map(p=>p.type+"@"+px(p.p)).join("、")}));
+    if(bs.length) state.push("近期缠论买点："+bs.map(p=>p.type+"@"+px(p.p)).join("、")+"。");
+    if(ss.length) state.push("近期缠论卖点："+ss.map(p=>p.type+"@"+px(p.p)).join("、")+"。");
   }
 
-  /* --- 模块 4：剧本与触发条件 --- */
-  /* 价位要【可执行】：站在 MA20 上就用 MA20 当支撑；跌破后 MA20 变成压力，支撑改用近 20 日低点。
-     旧版跌破后直接给 60 日最低点，离现价十万八千里，等于没说。 */
-  let sup, supName;
+  /* --- 模块 4：关键价位与推演（缠论 + 均线） ---
+     价位要可执行：站上 MA20 就拿 MA20 当支撑；跌破了 MA20 变压力，支撑退到近 20 日低点。 */
+  let sup, supName, res, resName;
   if(m.ma[20]!=null && m.close>=m.ma[20]){ sup=m.ma[20]; supName="MA20"; }
   else { sup=m.lo20; supName="近 20 日低点"; }
-  const scen=[];
-  scen.push("突破确认：<b>放量站稳 "+px(m.hi20)+"</b>（近 20 日高点）——缩量假突破是这种位置最常见的坑。");
-  scen.push("结构失效：<b>跌破 "+px(sup)+"</b>（"+supName+"）且当天收不回 → 别再用「长期看好」给自己找借口。");
-  if(m.ma[20]!=null && m.close<m.ma[20])
-    scen.push("上方还有一道坎：<b>MA20 = "+px(m.ma[20])+"</b>，站回去之前，任何反弹都只能算修复，不算转强。");
-  scen.push((m.tdDn===0&&m.tdUp===0)
-      ? "九转目前无有效序列：本轮计数已被打断，等新一轮开始再看。"
-      : "九转：<b>"+(m.tdUp>0?("上升第 "+m.tdUp+" 根"):("下降第 "+m.tdDn+" 根"))+"</b>"
-        + (Math.max(m.tdUp,m.tdDn)>=T.tdDone ? "，已到信号位，是「可以反应」而不是「必须反应」。" : "，未到 9 之前都是过程值，别抢跑。"));
-  const tr=CGD.owner&&CGD.owner.tRules;
-  if(tr&&tr.enabled) scen.push(m.atrPct>=tr.minAtr ? _cgdTpl(_cgdPick(S.tOk,seed),{atr:m.atrPct.toFixed(2)})
-                                                   : _cgdTpl(_cgdPick(S.tNo,seed),{atr:m.atrPct.toFixed(2)}));
+  if(m.ma[20]!=null && m.close<m.ma[20]){ res=m.ma[20]; resName="MA20，站回去才算转强"; }
+  else { res=m.hi20; resName="近 20 日高点"; }
+  const upTgt=(m.chan.zs&&m.chan.zs.high>res)?("中枢上沿 "+px(m.chan.zs.high)+"，再往上看近 60 日高点 "+px(m.hi)):("近 60 日高点 "+px(m.hi));
+  const dnTgt=(m.chan.zs&&m.chan.zs.low<sup)?("中枢下沿 "+px(m.chan.zs.low)+"，再退是近 60 日低点 "+px(m.lo)):("近 60 日低点 "+px(m.lo));
+  const lv=[];
+  lv.push("上方压力：<b>"+px(res)+"</b>（"+resName+"）"
+    +(m.chan.zs&&m.close<m.chan.zs.high?"；再往上是中枢上沿 "+px(m.chan.zs.high):""));
+  lv.push("下方支撑：<b>"+px(sup)+"</b>（"+supName+"）"
+    +(m.chan.zs&&m.close>m.chan.zs.low?"；跌穿后看中枢下沿 "+px(m.chan.zs.low):""));
+  lv.push("推演：若<b>放量站稳 "+px(res)+"</b> → 打开向上的空间，先看 "+upTgt+"；"
+    +"若<b>失守 "+px(sup)+"</b> 且收不回 → 退看 "+dnTgt+"。这一条就是本图信号的失效位。");
+  if(m.lastPen&&m.lastPen.dir==="up")
+    lv.push("缠论笔推演：最近向上笔 "+px(m.lastPen.from)+" → "+px(m.lastPen.to)
+      +"，只要不下破笔起点 "+px(m.lastPen.from)+"，结构就还成立。");
+  else if(m.lastPen)
+    lv.push("缠论笔推演：最近向下笔 "+px(m.lastPen.from)+" → "+px(m.lastPen.to)
+      +"，反抽不破笔起点 "+px(m.lastPen.from)+" 之前，反弹都按修复看待。");
 
-  /* --- 模块 5：风险与泼冷水 --- */
+  /* --- 模块 5：操作建议（分「有持仓 / 未持仓」两套） --- */
+  const hold=[], cash=[];
+  if(m.trend==="bull"||m.trend==="midup"){
+    hold.push("以持有为主，<b>跌破 "+px(sup)+" 且当天收不回</b>再减仓——趋势没坏不用频繁操作。");
+    hold.push("接近 "+px(res)+"（"+resName+"）可兑现一部分，回踩不破支撑再接回。");
+    cash.push("别追高：<b>回踩 "+px(sup)+" 附近企稳</b>（缩量不破、收回支撑）再分批上车。");
+    cash.push("或等<b>放量突破 "+px(res)+" 并站稳</b>后小仓跟进，跌破支撑即离场。");
+  } else if(m.trend==="bear"||m.trend==="middn"){
+    hold.push("反弹到 <b>"+px(res)+"</b>（"+resName+"）附近减仓，别把反抽当反转。");
+    hold.push("若再破 <b>"+px(m.lo)+"</b>（近 60 日低点）说明下跌在加速，先出来别硬扛。");
+    cash.push("<b>不接飞刀</b>：在价格站回 MA20、且出现放量止跌或底背离之前，只看不动。");
+    cash.push("左侧想接也只做观察仓试错，仓位控制在“错了不心疼”的水平。");
+  } else {
+    hold.push("区间思路：靠近区间下沿 <b>"+px(m.lo20)+"</b> 不杀跌，靠上沿 <b>"+px(m.hi20)+"</b> 兑现一部分。");
+    hold.push("放量有效突破区间之前，<b>仓位别加</b>。");
+    cash.push("观望等方向：放量站稳区间上沿跟多、破位下沿回避。");
+    cash.push("中枢内低吸高抛只适合短线高手，没那个执行力就等突破。");
+  }
   const risk=[];
-  if(m.dev20!=null&&Math.abs(m.dev20)>=T.maDevExtreme) risk.push("乖离已达 <b>"+pct(Math.abs(m.dev20),1)+"</b>，均值回归的引力在这个位置很强。");
-  if(m.vr<T.volRatioQuiet) risk.push("全靠缩量推动（量比 "+m.vr.toFixed(2)+"），这类信号的含金量要打折，因为没有真金白银进场。");
+  if(m.dev20!=null&&Math.abs(m.dev20)>=T.maDevExtreme) risk.push("乖离已达 <b>"+pct(Math.abs(m.dev20),1)+"</b>，这个位置均值回归的引力很强，追单要小心。");
+  if(m.vr<T.volRatioQuiet) risk.push("缩量推动的行情（量比 "+m.vr.toFixed(2)+"），信号含金量打折——没有真金白银进场。");
   if(m.pos>=T.posHigh&&m.lastDiv&&m.lastDiv.type==="top") risk.push("高位（"+m.pos.toFixed(0)+"% 分位）+ 顶背离，追高的赔率不划算。");
-  if(m.pos<=T.posLow&&m.lastDiv&&m.lastDiv.type==="bot") risk.push("低位 + 底背离是<b>线索</b>不是<b>买点</b>：背离可以反复背离两次三次才开始修复。");
-  if(m.inZS) risk.push("价格在中枢内，<b>中枢内是无趋势</b>——按趋势做会被来回抽耳光。");
-  if(Math.abs(m.dev20||0)<T.maDevWarn&&m.vr<T.volRatioHot&&m.trend==="mix") risk.push("趋势、量能、位置都没给明确答案，这就是典型的<b>观察仓</b>状态，不是出手状态。");
-  risk.push(_cgdPick(S.riskAlways,seed));
-  if(CGD.owner&&CGD.owner.donts&&CGD.owner.donts.length) risk.push("你的红线：<b>"+CGD.owner.donts.join(" / ")+"</b>。");
+  if(m.pos<=T.posLow&&m.lastDiv&&m.lastDiv.type==="bot") risk.push("低位 + 底背离是<b>线索</b>不是<b>买点</b>，背离可以连续出现两三次才开始修复。");
+  if(!risk.length&&m.trend==="mix") risk.push("趋势、量能、位置都没给明确答案，这是<b>观察仓</b>状态，不是出手状态。");
 
   let h="";
   h+='<div class="ai-head">'
     + '<span class="ai-rating" style="background:'+rate.color+'22;color:'+rate.color+';border:1px solid '+rate.color+'55">'
     + '<span>'+rate.key+'</span><small>'+rate.desc+'</small></span>'
-    + '<span class="ai-score">'+CGD.meta.name+' v'+CGD.meta.version+' · '+m.date+' · '+m.n+'根'+periodLabel()+'</span>'
+    + '<span class="ai-score">AI 点评 · '+m.date+' · '+m.n+'根'+periodLabel()+'</span>'
     + '</div>';
   h+='<div class="ai-concl">'+conclHead+conclBody+'</div>';
   h+='<div class="ai-sec"><h4>📍 位置与关键价位</h4>'+kvHtml+'</div>';
-  h+='<div class="ai-sec"><h4>🧱 结构与信号</h4><ul>'+struct.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
-  h+='<div class="ai-sec"><h4>🎬 剧本与触发条件</h4><ul>'+scen.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
-  h+='<div class="ai-sec ai-risk"><h4>⚠️ 风险与泼冷水</h4><ul>'+risk.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
+  h+='<div class="ai-sec"><h4>🧭 当前状态</h4><ul>'+state.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
+  h+='<div class="ai-sec"><h4>📐 关键价位与推演</h4><ul>'+lv.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
+  h+='<div class="ai-sec"><h4>🎯 操作建议</h4>'
+    +'<div style="margin-bottom:6px"><b style="color:#e9ebef">有持仓</b><ul>'+hold.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>'
+    +'<div><b style="color:#e9ebef">未持仓</b><ul>'+cash.map(x=>"<li>"+x+"</li>").join("")+'</ul></div></div>';
+  if(risk.length) h+='<div class="ai-sec ai-risk"><h4>⚠️ 风险提示</h4><ul>'+risk.map(x=>"<li>"+x+"</li>").join("")+'</ul></div>';
   h+='<div style="margin-top:10px;color:#a5abb4;font-size:11px">评分构成：'+sc.why.join("　")+'</div>';
   box.innerHTML=h;
-  st.textContent="已生成 · 数据源 "+(reviewSrc||"缓存")+" · 人格 "+CGD.meta.name+" v"+CGD.meta.version+(CGD_EXT?"":"（外部人格文件缺失，使用内置兜底）");
+  st.textContent="已生成 · 数据源 "+(reviewSrc||"缓存");
 }
 function periodLabel(){ return {day:"日线",week:"周线",month:"月线","1":"1分","5":"5分","15":"15分","30":"30分","60":"60分"}[curPeriod]||curPeriod; }
 /* 点评入口：取当前缓存的 K 线数据，不重复请求网络 */
@@ -3822,7 +3851,7 @@ refresh();
 (function(){
   const em=document.getElementById("aiEmoji"); if(em) em.textContent=CGD.meta.emoji||"📊";
   const tag=document.getElementById("aiPersonaTag");
-  if(tag) tag.textContent=(CGD.meta.name||"chatgyd")+" v"+CGD.meta.version+(CGD_EXT?" (外部人格)":" (内置兜底)");
+  if(tag) tag.textContent="AI 点评";
   const b=document.getElementById("aiBtn"); if(b) b.onclick=runReview;
 })();
 setInterval(tick,1000);
