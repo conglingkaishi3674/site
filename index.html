@@ -134,7 +134,9 @@
 .rail.collapsed .rail-toggle{flex:1 1 auto;width:auto}
 .rail.collapsed{width:58px;padding:12px 8px}
 .rail.collapsed .rail-seg,.rail.collapsed .rail-tag,.rail.collapsed .rail-box,
-.rail.collapsed .rail-cal,.rail.collapsed .rail-mine,.rail.collapsed #railDate{display:none}
+.rail.collapsed .rail-cal,.rail.collapsed .rail-mine{display:none}
+/* 日期框可能带着内联 display:block（点开过 📅 再收起），必须 !important 才压得住 */
+.rail.collapsed #railDate{display:none!important}
 @media(max-width:1200px) and (min-width:901px){
   .rail{display:none}
   .app{padding-right:214px !important}
@@ -1399,6 +1401,14 @@ document.querySelectorAll(".pick-card").forEach(c=>c.addEventListener("click",()
 let pickItemsAll=[], pickSortBy="rank", pickSortAsc=false, pickGroup=null;
 const PICK_STARS=(()=>{ try{ return new Set(JSON.parse(localStorage.getItem("td_pick_stars")||"[]")); }catch(e){ return new Set(); } })();
 function savePickStars(){ try{ localStorage.setItem("td_pick_stars",JSON.stringify([...PICK_STARS])); }catch(e){} }
+/* 星标服务端计数：stars 表按 (code, uid) 主键去重 —— 一人一票、可取消。
+   本机标识与聊天右栏共用 td_uid（右栏模块先执行，已写入；这里兜底再补一次）。 */
+const STAR_API="https://api.conglingkaishi3674.com";
+const STAR_UID=(()=>{ let u="";
+  try{ u=localStorage.getItem("td_uid")||""; if(!u){ u="u"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem("td_uid",u); } }
+  catch(e){ u="u"+Math.random().toString(36).slice(2); }
+  return u; })();
+const STAR_CNT={};                       /* code → 总人数（悬停提示用） */
 function starOf(it){
   const sv=+((it&&it.stars)||0), lc=(it&&PICK_STARS.has(it.code))?1:0;
   return Math.max(sv,lc);
@@ -1444,6 +1454,17 @@ function toggleStar(code){
   savePickStars();
   document.querySelectorAll('#pickList .pl-star[data-code="'+code+'"]')
     .forEach(x=>x.classList.toggle("on",PICK_STARS.has(code)));
+  /* 上报服务端：stars 表按 (code,uid) 主键去重，一人只算一次；on=false 即取消 */
+  fetch(STAR_API+"/v1/star",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({code,uid:STAR_UID,on:PICK_STARS.has(code)})})
+    .then(r=>r.json()).then(j=>{
+      if(j&&j.ok){ STAR_CNT[code]=j.count; updateStarTitle(code); }
+    }).catch(()=>{});
+}
+function updateStarTitle(code){
+  const n=STAR_CNT[code]||0;
+  document.querySelectorAll('#pickList .pl-star[data-code="'+code+'"]')
+    .forEach(x=>{ x.title="标星"+(n?" · "+n+" 人":""); });
   if(pickSortBy==="star") renderPickList(pickItemsAll);   /* 正按星标排就即时重排 */
 }
 document.getElementById("pickSort").addEventListener("click",e=>{
@@ -1501,6 +1522,28 @@ function renderPickList(items){
       +'</div>';
   }).join("");
   el._items=list;   /* 点击取的是排序后的序号，必须存排完的那一份 */
+  syncStarCounts(); /* 拉一次星标人数（防抖 800ms），把「我标过的」和总数同步回来 */
+}
+/* 星标人数同步：列表渲染后按当前代码集合批量查一次；连点排序也不会刷爆接口（防抖） */
+let _starTimer=null;
+function syncStarCounts(){
+  clearTimeout(_starTimer);
+  _starTimer=setTimeout(async()=>{
+    const codes=[...((document.getElementById("pickList")._items)||[])].map(x=>x.code).filter(Boolean);
+    if(!codes.length) return;
+    try{
+      const r=await fetch(STAR_API+"/v1/star?codes="+encodeURIComponent(codes.join(","))+"&uid="+encodeURIComponent(STAR_UID),{cache:"no-store"});
+      const j=await r.json(); if(!j||!j.ok) return;
+      Object.keys(j.counts||{}).forEach(c=>{ STAR_CNT[c]=j.counts[c]; });
+      (j.mine||[]).forEach(c=>PICK_STARS.add(c));
+      savePickStars();
+      document.querySelectorAll("#pickList .pl-star[data-code]").forEach(el=>{
+        const c=el.dataset.code, n=STAR_CNT[c]||0;
+        el.title="标星"+(n?" · "+n+" 人":"");
+        el.classList.toggle("on",PICK_STARS.has(c));
+      });
+    }catch(e){ }
+  },800);
 }
 syncPickSort();
 document.getElementById("pickList").addEventListener("click",e=>{
