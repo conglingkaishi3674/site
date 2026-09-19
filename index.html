@@ -3814,6 +3814,36 @@ function reviewScore(m){
   if(m.tdDn>=T.tdDone){ s+=1; why.push("九转下跌第 9 根 <b>+1</b>"); }
   if(m.tdUp>=T.tdDone){ s-=1; why.push("九转上升第 9 根 <b>-1</b>"); }
   if(m.vr>=T.volRatioHot){ const d=(m.chg>=0?.5:-.5); s+=d; why.push("放量"+(m.chg>=0?"上涨":"下跌")+" <b>"+(d>0?"+":"")+d+"</b>"); }
+  /* 可买入性（±2，最高权重档）：趋势多空回答「这只票好不好」，这一项回答「现在是不是买点」。
+     判据直接对齐选股器三类形态（P1 左侧吸筹 / P2·P3 回踩确认 / 突破临界），
+     避免出现「趋势满分但早就飞上天、追进去就站岗」的高分陷阱。 */
+  {
+    const bull=m.trend==="bull"||m.trend==="midup";
+    const bear=m.trend==="bear"||m.trend==="middn";
+    const dev=m.dev20==null?0:m.dev20;
+    const pos=(m.lastPen&&m.lastPen.dir==="up"&&m.lastPen.to>m.lastPen.from)
+      ? (m.close-m.lastPen.from)/(m.lastPen.to-m.lastPen.from) : null;
+    let b=null;
+    if(bull&&Math.abs(dev)<=3&&m.vr<T.volRatioHot)
+      b=[2,"上升趋势缩量回踩 MA20 企稳 —— 标准买点区（对应选股器「回踩确认」形态） <b>+2</b>"];
+    else if(bull&&m.close>=m.hi20*0.97&&m.vr>=1)
+      b=[2,"贴近 20 日高点且量能在放 —— 突破临界位，放量站稳即买点 <b>+2</b>"];
+    else if(pos!=null&&pos>0&&pos<=0.5)
+      b=[2,"向上笔回踩近半不破笔起点 —— 缠论二买区 <b>+2</b>"];
+    else if(m.lastDiv&&m.lastDiv.type==="bot"&&!bear)
+      b=[2,"底背离且趋势未走坏 —— 左侧买点（对应「低位吸筹」思路） <b>+2</b>"];
+    else if(bull&&m.trend==="midup"&&dev>=-8&&dev<0)
+      b=[1,"回踩 MA20 下方但 MA20 仍上行 —— 接近买点，等收回企稳再动手 <b>+1</b>"];
+    else if(bull&&dev>=12)
+      b=[-1,"形态强但乖离已达 "+dev.toFixed(1)+"% —— 远离买点，追高赔率差 <b>-1</b>"];
+    else if(bull&&typeof m.pos==='number'&&m.pos>=95)
+      b=[-1,"贴着 60 日区间顶 —— 这里是兑现区不是买点 <b>-1</b>"];
+    else if(bear)
+      b=[-2,"下行趋势未止跌 —— 技术上暂无买入信号 <b>-2</b>"];
+    else
+      b=[0,"当前形态无明确买点（不加分也不扣） <b>0</b>"];
+    s+=b[0]; why.push("可买入性："+b[1]);
+  }
   return {score:+s.toFixed(1), why};
 }
 /* 生成点评 HTML */
@@ -3835,11 +3865,11 @@ function renderReview(data, name){
       {from:px(m.lastPen.from),to:px(m.lastPen.to)}));
   if(m.lastDiv) concl.push(_cgdPick(m.lastDiv.type==="bot"?S.divBot:S.divTop,seed));
   const conclHead = "<b>"+esc(name||"该标的")+"：</b>"+rate.key+"格局。";
-  /* 评分展示归一化到 ±10：内部计分极值是 ±8.5（trend±2 + MACD±1.5 + 背离±1.5 + 笔±1
-     + 九转±1 + 位置/柱/量比各±0.5），但 ±8.5 这种数字读起来别扭，档位阈值也是按内部
-     标尺校准好的 —— 动权重会连锁改档、还会和人格文件里的 ratings 对不上，
+  /* 评分展示归一化到 ±10：内部计分极值是 ±10.5（trend±2 + 可买入性±2 + MACD±1.5
+     + 背离±1.5 + 笔±1 + 九转±1 + 位置/柱/量比各±0.5），但 ±10.5 读起来别扭，档位阈值
+     也是按内部标尺校准好的 —— 动权重会连锁改档、还会和人格文件里的 ratings 对不上，
      所以只在展示层等比放大到 ±10，构成明细同步换算，加起来仍等于显示分。 */
-  const RAW_MAX=8.5, SPAN=10;
+  const RAW_MAX=10.5, SPAN=10;
   const norm=v=>+(v/RAW_MAX*SPAN).toFixed(1);
   const normWhy=s=>String(s).replace(/<b>([+-]\d+(?:\.\d+)?)<\/b>/g,(m,n)=>"<b>"+(n>0?"+":"")+norm(+n)+"</b>");
   const conclBody = concl.join("")+" 综合评分 <b>"+(sc.score>0?"+":"")+norm(sc.score)+"</b>"
@@ -3893,10 +3923,13 @@ function renderReview(data, name){
   const upTgt=(m.chan.zs&&m.chan.zs.high>res)?("中枢上沿 "+px(m.chan.zs.high)+"，再往上看近 60 日高点 "+px(m.hi)):("近 60 日高点 "+px(m.hi));
   const dnTgt=(m.chan.zs&&m.chan.zs.low<sup)?("中枢下沿 "+px(m.chan.zs.low)+"，再退是近 60 日低点 "+px(m.lo)):("近 60 日低点 "+px(m.lo));
   const lv=[];
+  /* ⚠ 两处括号补充都必须保证「退守位比当前位更远」才有意义：
+     现价跌得很低时中枢下沿可能反而在支撑位上方 —— 那就不能说「跌穿后看中枢下沿」，
+     否则出现「跌破 6.33 后看 6.50」这种越跌越往上看的荒谬推演（主人实测抓到的）。 */
   lv.push("上方压力：<b>"+px(res)+"</b>（"+resName+"）"
-    +(m.chan.zs&&m.close<m.chan.zs.high?"；再往上是中枢上沿 "+px(m.chan.zs.high):""));
+    +(m.chan.zs&&m.chan.zs.high>res?"；再往上是中枢上沿 "+px(m.chan.zs.high):""));
   lv.push("下方支撑：<b>"+px(sup)+"</b>（"+supName+"）"
-    +(m.chan.zs&&m.close>m.chan.zs.low?"；跌穿后看中枢下沿 "+px(m.chan.zs.low):""));
+    +(m.chan.zs&&m.chan.zs.low<sup?"；跌穿后看中枢下沿 "+px(m.chan.zs.low):""));
   lv.push("推演：若<b>放量站稳 "+px(res)+"</b> → 打开向上的空间，先看 "+upTgt+"；"
     +"若<b>失守 "+px(sup)+"</b> 且收不回 → 退看 "+dnTgt+"。这一条就是本图信号的失效位。");
   if(m.lastPen&&m.lastPen.dir==="up")
