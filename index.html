@@ -1178,11 +1178,28 @@ function afterLayoutChange(){
   const nickEl=$("railNick");
   if(nickEl){
     nickEl.textContent=nick;
-    nickEl.onclick=()=>{
+    nickEl.onclick=async()=>{
       const v=window.prompt("给自己起个名字（最多 16 字）", nick);
       if(v==null) return;
       const s=String(v).trim().slice(0,16);
       if(!s) return;
+      /* 保留名「從零开始」只归站长：需要口令认领，服务端校验（变体如"從零 開始"也算保留名） */
+      let key="";
+      try{ key=localStorage.getItem("td_owner_key")||""; }catch(e){}
+      try{
+        const c=await fetch(API+"/v1/nick/check",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({nick:s,key})});
+        const jc=await c.json();
+        if(jc&&jc.reserved&&!jc.ok){
+          const k=window.prompt("「"+s+"」是站长专用名，请输入管理口令认领：");
+          if(k==null) return;
+          const ck=await fetch(API+"/v1/nick/check",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({nick:s,key:k})});
+          const jck=await ck.json();
+          if(!(jck&&jck.ok)){ window.alert("口令不对，名字没改。"); return; }
+          try{ localStorage.setItem("td_owner_key",k); }catch(e){}
+        }
+      }catch(e){ /* 校验接口连不上就先放行，发送时服务端还会再拦一次 */ }
       nick=s; nickEl.textContent=s;
       try{ localStorage.setItem("td_nick",s); }catch(e){}
     };
@@ -1231,9 +1248,11 @@ function afterLayoutChange(){
     const wait=c.gap-(Date.now()-state[kind].last);
     if(wait>0){ flash(kind,"还差 "+Math.ceil(wait/1000)+" 秒"); return; }
     btn.disabled=true;
+    let okey="";
+    try{ okey=localStorage.getItem("td_owner_key")||""; }catch(e){}
     try{
       const r=await fetch(API+"/v1/msg?kind="+kind,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({kind,nick,content:txt,uid})});
+        body:JSON.stringify({kind,nick,content:txt,uid,key:okey})});
       const j=await r.json();
       if(!j||!j.ok) throw new Error((j&&j.error)||"发送失败");
       inp.value=""; state[kind].last=Date.now(); curDay=todayStr();
@@ -1258,8 +1277,10 @@ function afterLayoutChange(){
   });
   const cal=$("railCal"), dsel=$("railDate");
   if(cal&&dsel){
+    let dOpen=false;                        /* 开关状态自己记：CSS 初始 display:none 时
+                                               style.display 读出来是 ""，拿它当状态会第一次点击反着走 */
     cal.title="翻看某一天的记录";
-    cal.onclick=()=>{ dsel.value=dsel.value||curDay; dsel.style.display=dsel.style.display==="none"?"":"none"; if(dsel.style.display==="") dsel.focus(); };
+    cal.onclick=()=>{ dOpen=!dOpen; dsel.style.display=dOpen?"":"none"; if(dOpen) dsel.focus(); };
     dsel.onchange=()=>{ curDay=dsel.value||todayStr(); load("chat",true); load("cmt",true); };
   }
   /* 切 tab 时拉当前类型；之后每 30 秒轮询一次（页面不可见时不轮询）。
