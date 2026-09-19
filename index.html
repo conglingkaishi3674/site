@@ -427,6 +427,7 @@
   <span>状态 <b id="status">加载中…</b></span>
   <span>更新 <b id="updated">—</b>（截至 <span id="lastt">—</span>）</span>
   <span>下次刷新 <b id="countdown">—</b></span>
+  <span id="todayDate" style="margin-left:auto"></span>
  </div>
 
 
@@ -1297,6 +1298,18 @@ function afterLayoutChange(){
   if(seg) seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ curKind=b.dataset.r; load(curKind,true); }));
   load("chat",true); load("cmt",true);
   setInterval(()=>{ if(document.hidden) return; load(curKind,false); },30000);
+})();
+
+/* 状态栏最右：今天几号星期几（跨天自动翻页，每分钟对一次表） */
+(function(){
+  const el=document.getElementById("todayDate"); if(!el) return;
+  const WK=["日","一","二","三","四","五","六"];
+  const paint=()=>{
+    const d=new Date();
+    el.textContent=d.getFullYear()+" 年 "+(d.getMonth()+1)+" 月 "+d.getDate()+" 日 · 星期"+WK[d.getDay()];
+  };
+  paint();
+  setInterval(()=>{ const d=new Date(); if(d.getHours()===0&&d.getMinutes()===0) paint(); },60*1000);
 })();
 
 function dispatchRefresh(){
