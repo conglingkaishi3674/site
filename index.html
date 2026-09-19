@@ -3160,26 +3160,64 @@ function calcLevels(data){
 
 /* ============ ECharts 渲染 ============ */
 let _echartsReady=false, _klineInst=null, _echartsLoading=false, _echartsQueue=[], _zoom=null;
+/* ECharts 有 1MB —— 页面「卡卡的」最大来源就是它。三处优化：
+   ① 本地缓存：下载一次后存 localStorage，第二次访问起 0 下载、秒开；
+   ② 竞速：三个源同时发，谁先回用谁。原来是串行重试，第一个源慢就只能干等
+      （实测直连 jsdelivr 25 秒、unpkg 3.6 秒，串行等于每次都吃最慢那个的苦头）；
+   ③ fetch 全部失败时回退到 <script src> 串行加载（老环境的跨域限制兜底）。 */
+const ECHARTS_CACHE_KEY='td_echarts_src_v5.5.1';
+function echartsInject(code){
+  const s=document.createElement('script');
+  s.textContent=code;                 /* 内联执行：与 <script src> 等价，但源码能存进缓存 */
+  document.head.appendChild(s);
+}
 function ensureECharts(cb){
   if(window.echarts){ cb(); return; }
   _echartsQueue.push(cb);
   if(_echartsLoading) return;              // 正在加载：排队，加载完统一回调
   _echartsLoading=true;
   const flush=(ok)=>{ _echartsLoading=false; const q=_echartsQueue; _echartsQueue=[]; if(ok) q.forEach(f=>{try{f();}catch(e){}}); };
-  // 多 CDN 容灾：jsdelivr → unpkg → bootcdn(国内)
+  const fail=(msg)=>{ flush(false); const el=document.getElementById('klineStatus'); if(el) el.textContent='❌ '+msg; };
+
+  /* ① 本地缓存命中：不再走网络 */
+  let cached=null;
+  try{ cached=localStorage.getItem(ECHARTS_CACHE_KEY); }catch(e){}
+  if(cached && cached.length>600000 && cached.indexOf('echarts')>0){
+    echartsInject(cached);
+    if(window.echarts){ flush(true); return; }
+    try{ localStorage.removeItem(ECHARTS_CACHE_KEY); }catch(e){}   /* 缓存坏了：丢掉重下 */
+  }
+
   const urls=['https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js',
               'https://unpkg.com/echarts@5.5.1/dist/echarts.min.js',
               'https://cdn.bootcdn.net/ajax/libs/echarts/5.5.1/echarts.min.js'];
-  let i=0;
-  (function next(){
-    if(window.echarts){ flush(true); return; }
-    if(i>=urls.length){ flush(false); document.getElementById('klineStatus').textContent='❌ ECharts 全部 CDN 加载失败（需联网；国内建议用能访问 bootcdn 的网络）'; return; }
-    const s=document.createElement('script');
-    s.src=urls[i++];
-    s.onload=()=>{ _echartsReady=true; flush(true); };
-    s.onerror=()=>{ s.remove(); next(); };
-    document.head.appendChild(s);
-  })();
+  const ok=txt=>txt&&txt.length>600000&&txt.indexOf('echarts')>0;
+  let done=false, pending=urls.length;
+  const timer=setTimeout(()=>{ if(done) return; done=true; fail('ECharts 加载超时（网络较慢，刷新重试）'); },12000);
+  const settle=()=>{ if(--pending<=0 && !done){ done=true; clearTimeout(timer); fallbackScript(); } };
+  urls.forEach(u=>{
+    fetch(u,{cache:'force-cache'}).then(r=>{ if(!r.ok) throw new Error('http'); return r.text(); })
+      .then(txt=>{
+        if(done||!ok(txt)) throw new Error('bad');
+        done=true; clearTimeout(timer);
+        echartsInject(txt);
+        try{ localStorage.setItem(ECHARTS_CACHE_KEY,txt); }catch(e){}   /* 存不下就算了，下次再下 */
+        if(window.echarts) flush(true); else fail('ECharts 载入异常');
+      }).catch(()=>{ if(!done) settle(); });
+  });
+  /* ③ 兜底：fetch 被跨域策略拦住时（少数环境），退回 <script src> 串行 */
+  function fallbackScript(){
+    let i=0;
+    (function next(){
+      if(window.echarts){ flush(true); return; }
+      if(i>=urls.length){ fail('ECharts 全部 CDN 加载失败（需联网）'); return; }
+      const s=document.createElement('script');
+      s.src=urls[i++];
+      s.onload=()=>{ _echartsReady=true; flush(true); };
+      s.onerror=()=>{ s.remove(); next(); };
+      document.head.appendChild(s);
+    })();
+  }
 }
 /* 筹码摘要：显示在筹码峰「下方」那条空白带里（原来挂在顶部 title.subtext，与图例挤成一行）。
    拆成多行、每行一个指标 —— 那块区域只有约 88px 宽（筹码柱的宽度），一整句放不下。
