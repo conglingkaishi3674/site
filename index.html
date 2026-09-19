@@ -1232,10 +1232,11 @@ function afterLayoutChange(){
         h+='<div class="rail-time">'+esc(label)+'</div>';
       }
       prev=m.at;
+      const mine=(m)=> (uid && m.uid && m.uid===uid) || m.me===true;
       if(kind==="chat"){
-        h+='<div class="msg '+(m.me?"me":"other")+'"><span class="who">'+esc(m.nick)+(m.me?" · 我":"")+' · '+hhmm(m.at)+'</span>'+esc(m.content)+'</div>';
+        h+='<div class="msg '+(mine(m)?"me":"other")+'"><span class="who">'+esc(m.nick)+(mine(m)?" · 我":"")+' · '+hhmm(m.at)+'</span>'+esc(m.content)+'</div>';
       }else{
-        h+='<div class="cmt"><div class="ch"><span>'+esc(m.nick)+(m.me?" · 我":"")+'</span><span>'+hhmm(m.at)+'</span></div><div class="cb">'+esc(m.content)+'</div></div>';
+        h+='<div class="cmt"><div class="ch"><span>'+esc(m.nick)+(mine(m)?" · 我":"")+'</span><span>'+hhmm(m.at)+'</span></div><div class="cb">'+esc(m.content)+'</div></div>';
       }
     }
     box.innerHTML=h;
@@ -1251,7 +1252,13 @@ function afterLayoutChange(){
       if(toTop) box.scrollTop=0;
       else if(nearBottom) box.scrollTop=box.scrollHeight;
     }catch(e){
-      box.innerHTML='<div class="rail-empty">暂时连不上（'+esc(e.message)+'），稍后自动重试。</div>';
+      /* 断网 / 跨域失败时不要把已有消息冲成错误页 —— 列表还在就让它在，
+         只在最下面挂一句人话提示（自动轮询会重试）。
+         fetch 失败抛的是 TypeError: NetworkError when attempting to fetch resource，
+         e.message 是英文，直接显示出去只会让人一头雾水。 */
+      const hasMsg=box.querySelector(".msg, .cmt");
+      const tip='<div class="rail-empty">暂时连不上消息服务器，正在重试…</div>';
+      if(!hasMsg) box.innerHTML=tip;
     }
   }
   async function send(kind){
@@ -1272,7 +1279,11 @@ function afterLayoutChange(){
       const d=$("railDate"); if(d) d.value=curDay;
       await load(kind,false);
       const box=$(c.box); if(box) box.scrollTop=box.scrollHeight;
-    }catch(e){ flash(kind,e.message); }
+    }catch(e){
+      /* 同理：不要把 TypeError 的英文原文甩给用户 */
+      const t=(e&&e.name==="TypeError")? "网络不通，发送失败" : String((e&&e.message)||"发送失败");
+      flash(kind,t);
+    }
     finally{ btn.disabled=false; }
   }
   function flash(kind,msg){
