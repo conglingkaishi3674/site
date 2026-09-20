@@ -422,8 +422,9 @@
  a{color:var(--blue)}
 
  /* ============ K 线训练台 ============ */
- .kt-lobby{display:flex;gap:28px;flex-wrap:wrap}
- .kt-lobby-modes,.kt-lobby-stats{flex:1 1 300px;display:flex;flex-direction:column;gap:12px}
+ .kt-lobby{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+ /* 左列：开一局 + 战绩 + 规则；右列：可滚动的逐局明细（2026-09-20 重排，把左下空白填上） */
+ .kt-lobby-left,.kt-lobby-right{flex:1 1 300px;display:flex;flex-direction:column;gap:12px;min-width:0}
  .kt-lobby-title{font-weight:700;font-size:15px}
  .kt-sub{color:var(--muted);font-size:11px;font-weight:400}
  .kt-mode{font-size:14px;padding:12px 16px;justify-content:flex-start}
@@ -435,6 +436,34 @@
  .kt-hint{color:var(--muted);font-size:12px;min-height:18px;line-height:1.6}
  .kt-stats{font-size:13px;line-height:2;color:var(--muted)}
  .kt-stats b{color:var(--text);font-variant-numeric:tabular-nums;margin:0 2px}
+ /* 历史明细：每一局一行，全部显示（有多少条显示多少条），超高就滚动 */
+ .kt-his{margin-top:2px;max-height:min(58vh,540px);overflow:auto;padding-right:2px}
+ .kt-his-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;padding:5px 0;
+   border-bottom:1px solid rgba(255,255,255,.06);font-size:12px}
+ .kt-his-row b{flex:1 1 auto;min-width:0;color:var(--text);font-weight:600;
+   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .kt-his-row .kt-his-r{flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums}
+ .kt-his-row i{flex:1 1 100%;color:var(--muted);font-size:10.5px;font-style:normal;margin-top:1px}
+ /* 排位开局按钮：金色系，与模拟的蓝色区分 */
+ .kt-rank-go{background:linear-gradient(90deg,#6f5514,#4a3a0e);border:1px solid #b98c2a;color:#ffe9b0}
+ .kt-rank-go:hover{border-color:#e0b45a}
+ /* 排行榜：名次 / 昵称 / 最佳 / 场次 / 平均，五列网格 */
+ .kt-rank-tabs{display:inline-flex;gap:5px;margin-left:8px;vertical-align:middle}
+ .kt-rank-tabs button{background:var(--bg-soft);border:1px solid var(--line);color:var(--muted);
+   border-radius:8px;padding:3px 9px;cursor:pointer;font:inherit;font-size:11px}
+ .kt-rank-tabs button.on{color:#fff;border-color:var(--blue);background:rgba(95,168,255,.18)}
+ .kt-rank{max-height:min(46vh,420px);overflow:auto;font-size:12px}
+ .kt-rank-head,.kt-rank-row{display:grid;grid-template-columns:44px 1fr 74px 52px 62px;gap:6px;
+   align-items:center;padding:6px 2px}
+ .kt-rank-head{color:var(--muted);font-size:11px;border-bottom:1px solid var(--line)}
+ .kt-rank-row{border-bottom:1px solid rgba(255,255,255,.06)}
+ .kt-rank-row .rk{color:var(--muted);font-variant-numeric:tabular-nums}
+ .kt-rank-row.top .rk{color:#ffd54a}
+ .kt-rank-row .nm{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .kt-rank-row .bs,.kt-rank-row .av{font-variant-numeric:tabular-nums;font-weight:600}
+ .kt-rank-row .g{color:var(--muted)}
+ .kt-rank-me{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px;font-size:12px;color:var(--muted)}
+ .kt-rank-me b{color:var(--text)}
  .kt-rules{color:var(--muted);font-size:12px;line-height:1.9;border-top:1px dashed var(--line);padding-top:10px}
  .kt-rules b{color:var(--text);margin-right:6px}
  .kt-play{display:flex;gap:14px;align-items:stretch}
@@ -450,10 +479,12 @@
  .kt-sec span{color:var(--muted);white-space:nowrap}
  .kt-sec b{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
  .kt-up{color:#ff6f83}.kt-dn{color:#2bd67b}
- .kt-pm{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:2px}
- .kt-pm-btn{background:var(--bg-soft);border:1px solid var(--line);color:var(--muted);border-radius:9px;
-   padding:5px 12px;cursor:pointer;font:inherit;font-size:12px;transition:all .15s}
- .kt-pm-btn.on{color:#fff;border-color:var(--blue);background:rgba(95,168,255,.18)}
+ /* 时点提示：开盘阶段=蓝（可以按开盘价动手），收盘阶段=橙（按收盘价动手） */
+ .kt-phase{font-size:12px;color:var(--muted);background:rgba(255,255,255,.05);
+   border:1px solid var(--line);border-radius:9px;padding:6px 9px;margin-top:2px;line-height:1.6}
+ .kt-phase b{color:#5fa8ff}
+ .kt-phase.cls b{color:#ffb85c}
+ .kt-phase span{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
  .kt-ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
  .kt-ops .btn{padding:10px 6px;font-size:13.5px}
  .kt-ops .btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
@@ -495,7 +526,7 @@
    <button class="tab-btn sb-item" data-tab="flow"><span class="sb-ico">💰</span><span class="sb-txt"><b>板块资金流</b><i>主力净流入 · 异动</i></span></button>
    <button class="tab-btn sb-item" data-tab="watch"><span class="sb-ico">⭐</span><span class="sb-txt"><b>自选板块</b><i>自定义关注</i></span></button>
    <button class="tab-btn sb-item" data-tab="pick"><span class="sb-ico">🔍</span><span class="sb-txt"><b>选股器</b><i>策略分类 · 待配置</i></span></button>
-   <button class="tab-btn sb-item" data-tab="soon"><span class="sb-ico">🧩</span><span class="sb-txt"><b>新板块</b><i>建设中 · 待更新</i></span></button>
+   <button class="tab-btn sb-item" data-tab="soon"><span class="sb-ico">🎯</span><span class="sb-txt"><b>模拟 · 排位</b><i>历史片段 · 随机标的</i></span></button>
   </nav>
   <div class="sb-bottom">
    <button class="sb-toggle" id="sbToggle" title="收起 / 展开侧栏"><span class="sb-ico">«</span><span class="sb-txt">收起侧栏</span></button>
@@ -755,22 +786,130 @@
    </div>
   </section>
 
-  <!-- ========== 占位板块（待更新）==========
-       预留给后续新增的分析模块：现在只展示一个「待更新」占位，对外示意这里后续会有内容。
-       不取数、不自动刷新（见 dispatchRefresh 里对 soon 的处理），避免空跑请求。 -->
+  <!-- ========== 模块五：K 线训练台 ==========
+       纯本地的历史片段模拟盘：随机抽一只标的、随机截取最近约 300 根日 K 中的一段起点，
+       从那天起逐日推进。图表只喂「已披露」的数据 —— 未来的 K 线根本不进 option，想偷看也没有；
+       买卖按当日开盘/收盘价全仓成交（T+1、一字板不可成交），最多 90 个交易日，随时可结算。
+       结算面板给出收益率、最大回撤与「买入持有」基准对比；历史战绩只存本浏览器。
+       不取实时行情，切模块时不自动刷新（见 dispatchRefresh 里对 soon 的处理）。 -->
   <section class="section" id="sec-soon">
    <div class="module-header">
     <div class="module-title">
-     <h2>新板块 · 建设中</h2>
-     <p>该模块正在开发，这里先占个位置 —— 后续会在此处陆续上线新的分析内容。</p>
+     <h2>模拟 · 排位</h2>
+     <p>模拟盘：随机抽一只标的、随机截一段历史，只显示到「今天」为止的 K 线，一个交易日按<b>开盘 → 收盘</b>两段推进，你在哪一段下手就按哪个价成交 —— 未来数据完全不可见，练的是当下判断。下面还有「排位」：同一套规则（随机个股），结算成绩进排行榜。</p>
     </div>
-    <div class="timestamp">待更新</div>
+    <div class="timestamp" id="ktTime">—</div>
    </div>
-   <div class="panel" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center">
-    <div style="font-size:36px;line-height:1">🧩</div>
-    <div style="font-size:22px;font-weight:600;color:var(--text)">待更新</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.7">内容准备中，敬请期待。</div>
+
+   <!-- 开局大厅 -->
+   <div class="panel" id="ktLobby">
+    <div class="kt-lobby">
+     <!-- 左列：开一局 + 历史战绩 + 规则（原来左下大片空白，现在填满） -->
+     <div class="kt-lobby-left">
+      <div class="kt-lobby-title">开一局</div>
+      <button class="btn kt-mode" id="ktGoStock">🎲 随机个股训练</button>
+      <button class="btn secondary kt-mode" id="ktGoEtf">🎲 随机 ETF 训练</button>
+      <div class="kt-custom">
+       <input id="ktCode" maxlength="6" inputmode="numeric" placeholder="自定义：6 位代码">
+       <select id="ktPos" title="起点位置">
+        <option value="rand">起点随机</option>
+        <option value="early">起点偏前</option>
+        <option value="mid">起点偏中</option>
+        <option value="late">起点偏后</option>
+       </select>
+       <button class="btn secondary" id="ktGoCode">开始</button>
+      </div>
+      <div class="kt-hint" id="ktHint">点上面的按钮直接开局；抽签后自动加载该标的的历史日 K。</div>
+      <div class="kt-lobby-title" style="margin-top:4px">历史战绩 <span class="kt-sub">（仅存本浏览器）</span></div>
+      <div class="kt-stats" id="ktStats">—</div>
+      <div class="kt-rules">
+       <b>规则</b>
+       初始资金 <b>100 万</b>；一个交易日分两段推进 —— 按「下一阶段」<b>先到开盘、再到收盘</b>，你在哪一段下手就按哪个价成交（全仓、100 股整数倍）；<b>T+1</b>，当日买入次日才能卖；<b>一字板</b>不可成交；<b>看盘只给已披露的行情</b>（开盘阶段看不到当日的高/低/收）。每局最多 <b>90</b> 个交易日，随时可「结算并结束」。结算后对比「买入持有」基准 —— 看你的择时是加分还是减分。
+      </div>
+     </div>
+     <!-- 右列：逐局明细（唯一可滚动的区域） -->
+     <div class="kt-lobby-right">
+      <div class="kt-lobby-title">逐局明细 <span class="kt-sub" id="ktHisN">（0 局）</span></div>
+      <div class="kt-his" id="ktHis">—</div>
+     </div>
+    </div>
    </div>
+
+   <!-- 排位：规则与模拟完全一致，区别只有「成绩上排行榜」 -->
+   <div class="panel" id="ktRank" style="margin-top:14px">
+    <div class="kt-lobby">
+     <div class="kt-lobby-left">
+      <div class="kt-lobby-title">排位 <span class="kt-sub">（成绩上排行榜）</span></div>
+      <button class="btn kt-mode kt-rank-go" id="ktGoRank">🏆 排位 · 随机个股</button>
+      <div class="kt-hint" id="ktRankHint">规则与模拟完全一致 —— 区别只有一个：结算后成绩自动记进右边的排行榜。</div>
+      <div class="kt-rules">
+       <b>排位规则</b> 只有<b>随机个股</b>一种（自定义代码与 ETF 不计入排位）；同样是随机起点、90 个交易日、两段推进。榜上按<b>最佳收益 / 平均收益 / 场次</b>三种口径排序，只显示昵称（就是聊天区那个名字，点右栏名字可改）。
+      </div>
+     </div>
+     <div class="kt-lobby-right">
+      <div class="kt-lobby-title">训练排行榜 <span class="kt-sub" id="ktRankTotal"></span>
+       <span class="kt-rank-tabs" id="ktRankTabs">
+        <button class="on" data-m="best">最佳收益</button><button data-m="avg">平均收益</button><button data-m="games">场次</button>
+       </span>
+      </div>
+      <div class="kt-rank" id="ktRankList">加载中…</div>
+      <div class="kt-rank-me" id="ktRankMe"></div>
+     </div>
+    </div>
+   </div>
+
+   <!-- 对局中 -->
+   <div id="ktPlay" style="display:none">
+    <div class="kt-play">
+     <div class="panel kt-chart-panel">
+      <div class="kt-chart-head">
+       <b id="ktName">—</b>
+       <span class="kt-tag" id="ktMode">—</span>
+       <span class="kt-ma" id="ktMa"></span>
+       <span class="kt-day" id="ktDay"></span>
+      </div>
+      <div id="ktChart"></div>
+     </div>
+     <div class="panel kt-side">
+      <div class="kt-sec"><span>现价 / 涨跌</span><b id="ktPx">—</b></div>
+      <div class="kt-sec"><span>成交额</span><b id="ktAmt">—</b></div>
+      <div class="kt-sec"><span>训练进度</span><b id="ktProg">—</b></div>
+      <div class="kt-sec"><span>总资产</span><b id="ktEq">—</b></div>
+      <div class="kt-sec"><span>收益率</span><b id="ktRet">—</b></div>
+      <div class="kt-sec"><span>最大回撤</span><b id="ktDd">—</b></div>
+      <div class="kt-sec"><span>可用现金</span><b id="ktCash">—</b></div>
+      <div class="kt-sec"><span>持仓 / 成本</span><b id="ktPosCost">—</b></div>
+      <div class="kt-sec"><span>浮动盈亏</span><b id="ktFloat">—</b></div>
+      <!-- 时点提示：价格由当前阶段决定（开盘阶段=开盘价、收盘阶段=收盘价），不再让玩家自选 -->
+      <div class="kt-phase" id="ktPhaseBox">当前时点：<b id="ktPhase">—</b><span id="ktPhaseTip"></span></div>
+      <div class="kt-ops">
+       <button class="btn kt-b-next" id="ktNext">下一阶段 ▸</button>
+       <button class="btn kt-b-buy" id="ktBuy">买入</button>
+       <button class="btn secondary kt-b-sell" id="ktSell">卖出</button>
+       <button class="btn secondary" id="ktEnd">结算并结束</button>
+       <button class="btn secondary kt-quit" id="ktQuit">退出训练</button>
+      </div>
+      <div class="kt-logtitle">操作记录（新在上）</div>
+      <div class="kt-log" id="ktLog"><div class="kt-empty">尚未交易</div></div>
+     </div>
+    </div>
+   </div>
+
+   <!-- 结算覆盖层 -->
+   <div class="kt-overlay" id="ktOver" style="display:none">
+    <div class="kt-card">
+     <div class="kt-card-head">本局结算 · <span id="ovName"></span> <span class="kt-sub" id="ovReason"></span></div>
+     <div class="kt-big" id="ovRet">—</div>
+     <div class="kt-ovgrid" id="ovGrid"></div>
+     <div id="ovChart"></div>
+     <div class="kt-card-ops">
+      <button class="btn" id="ovAgain">再来一局（同模式）</button>
+      <button class="btn secondary" id="ovHome">回到大厅</button>
+     </div>
+    </div>
+   </div>
+
+   <div class="kt-toast" id="ktToast"></div>
   </section>
 
   </main>
@@ -4460,14 +4599,60 @@ setInterval(()=>{
     else if(mode==='late') a=lo+2*w;
     return a+Math.floor(Math.random()*(b-a+1));
   }
+  /* 本地小转义（不依赖外部 esc）：名称/日期来自接口，照规矩还是转一次 */
+  function escT(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function paintStats(){
     const el=$('ktStats'); if(!el) return;
-    let s; try{ s=Object.assign({n:0,win:0,sum:0,best:-1e9,worst:1e9},JSON.parse(localStorage.getItem('kt_stats_v1')||'{}')); }
-    catch(e){ s={n:0,win:0,sum:0,best:-1e9,worst:1e9}; }
+    let s; try{ s=Object.assign({n:0,win:0,sum:0,best:-1e9,worst:1e9,list:[]},JSON.parse(localStorage.getItem('kt_stats_v1')||'{}')); }
+    catch(e){ s={n:0,win:0,sum:0,best:-1e9,worst:1e9,list:[]}; }
+    const list=Array.isArray(s.list)?s.list:[];
+    const his=$('ktHis'), hn=$('ktHisN');
+    /* ---- 右列：逐局明细（唯一可滚动的区域）----
+       有多少条显示多少条（新的在上）。加明细之前存的老记录没有 list，这里就不显示 ——
+       只显示真发生过的事，不编造。 */
+    if(hn) hn.textContent='（共 '+list.length+' 局 · 新的在上）';
+    if(his){
+      if(!list.length){
+        his.innerHTML='<div class="kt-empty">还没有逐局明细 —— 打完一局结算后就会出现在这里。</div>';
+      }else{
+        let rh='';
+        for(let i=list.length-1;i>=0;i--){ const r=list[i]||{};
+          rh+='<div class="kt-his-row"><b>'+escT(r.n)+'</b>'
+            +'<span class="kt-his-r '+cls(r.r)+'">'+sgn(r.r)+'%</span>'
+            +'<i>'+escT(r.f)+' ~ '+escT(r.e)+' · '+(r.d||0)+' 个交易日'
+            +(r.hd!=null?(' · 持仓 '+r.hd+'/'+(r.d||0)+' 天'):'')
+            +(r.tn!=null?(' · '+r.tn+' 笔'):'')
+            +(r.ms!=null?(' · 最大回撤 '+f2(r.ms)+'%'):'')
+            +' · 基准 '+sgn(r.b)+'%'+(r.k?(' · '+escT(r.k)):'')+'</i></div>';
+        }
+        his.innerHTML=rh;
+      }
+    }
+    /* ---- 左列：汇总统计 ---- */
     if(!s.n){ el.innerHTML='还没有完成过训练局 —— 开一局试试手感'; return; }
-    el.innerHTML='完成 <b>'+s.n+'</b> 局 · 胜率 <b class="'+cls(s.win/s.n-0.5)+'">'+f2(s.win/s.n*100)+'%</b>'
+    let h='完成 <b>'+s.n+'</b> 局 · 胜率 <b class="'+cls(s.win/s.n-0.5)+'">'+f2(s.win/s.n*100)+'%</b>'
       +' · 平均 <b class="'+cls(s.sum/s.n)+'">'+sgn(s.sum/s.n)+'%</b><br>'
       +'最佳 <b class="kt-up">'+sgn(s.best)+'%</b> · 最差 <b class="kt-dn">'+sgn(s.worst)+'%</b>';
+    const f1=v=>(+v.toFixed(1));
+    /* 进阶汇总：全部从明细里现算，不额外存字段（存了就会有新旧不一致的风险）。
+       只有带交易字段（tn）的记录才参与 —— 老记录不参与也不显示，不做假统计。 */
+    const ok2=list.filter(function(r){ return r&&isFinite(r.tn)&&isFinite(r.r); });
+    if(ok2.length){
+      let tn=0,bn=0,hd=0,dy=0,wp=0,wn=0,ls=0,ln=0;
+      for(const r of ok2){
+        tn+=(r.tn||0); bn+=(r.bn||0); hd+=(r.hd||0); dy+=(r.d||0);
+        if(r.r>0){ wp+=r.r; wn++; } else { ls+=r.r; ln++; }
+      }
+      h+='<br>累计交易 <b>'+tn+'</b> 笔（买 <b>'+bn+'</b> / 卖 <b>'+(tn-bn)+'</b>）'
+        +' · 平均每局 <b>'+f1(tn/ok2.length)+'</b> 笔';
+      h+='<br>总持仓 <b>'+hd+'</b> 个交易日'
+        +(bn?('　平均每次买入持有 <b>'+f1(hd/bn)+'</b> 天'):'')
+        +(dy?('　持仓占比 <b>'+Math.round(hd/dy*100)+'%</b>'):'');
+      if(wn&&ln) h+='<br>盈利局平均 <b class="kt-up">'+sgn(wp/wn)+'%</b>　亏损局平均 <b class="kt-dn">'+sgn(ls/ln)+'%</b>'
+        +'　盈亏比 <b>'+f1(Math.abs((wp/wn)/(ls/ln)))+'</b>';
+    }
+    el.innerHTML=h;
   }
   function backLobby(){
     T=null;
@@ -4476,7 +4661,7 @@ setInterval(()=>{
   }
   async function startGame(kind){
     if(ktBusy) return; ktBusy=true;                   // 防连点并发开局
-    const hint=$('ktHint');
+    const hint=$(kind==='rank'?'ktRankHint':'ktHint'); // 排位的反馈写进排位自己的提示行
     try{
       let pick, posMode='rand';
       if(kind==='code'){
@@ -4492,12 +4677,15 @@ setInterval(()=>{
         if(bars.length<155){ hint.textContent='该标的上市不足 155 个交易日，玩不满 90 天，换一只吧'; return; }
         pick={name:nm,code:s.code,secid:s.secid,tencent:s.tencent,bars:bars};
       }else{
-        hint.textContent='抽签取数中…（随机标的 + 随机段）';
-        pick=await pickOne(kind);
+        hint.textContent=kind==='rank'?'排位抽签取数中…（随机个股 + 随机段）':'抽签取数中…（随机标的 + 随机段）';
+        pick=await pickOne(kind==='rank'?'stock':kind);   // 排位 = 随机个股（与模拟同一套取数）
       }
       lastMode=kind;
+      /* ph: 当前时点 —— 开局先看历史 + 起始日收盘（"要不要照收盘价买入"），
+         之后每按一次「下一阶段」在 开盘/收盘 之间推进（见 doNext）。
+         rank: 排位局 —— 规则与模拟一致，只是结算后成绩会上排行榜（见 finish）。 */
       T={sym:pick,bars:pick.bars,start:0,cur:0,cash:INIT_CASH,sh:0,cost:0,buyAt:-1,
-         equity:[],trades:[],pm:'close',kind:kind};
+         equity:[],trades:[],ph:'close',kind:(kind==='rank'?'stock':kind),rank:kind==='rank'};
       T.start=randStart(kind==='code'?posMode:'rand');
       T.cur=T.start;
       T.equity.push({t:T.bars[T.cur].t,v:INIT_CASH});
@@ -4506,27 +4694,67 @@ setInterval(()=>{
       $('ktOver').style.display='none';
       $('ktLog').innerHTML='<div class="kt-empty">尚未交易</div>';
       hint.textContent='点上面的按钮直接开局；抽签后自动加载该标的的历史日 K。';
-      $('ktTime').textContent='开局 '+T.bars[T.start].t+'（'+T.bars.length+' 根历史）';
-      /* 成交价模式按钮复位为「按收盘」 */
-      const pms=document.querySelectorAll('.kt-pm-btn');
-      for(let i=0;i<pms.length;i++) pms[i].classList.toggle('on',pms[i].getAttribute('data-pm')==='close');
-      const go=()=>{ paintAll(); toast('开局：'+T.sym.name+'，从 '+T.bars[T.start].t+' 开始 · 第 1 / '+MAX_DAYS+' 天'); };
+      /* 遮罩：这里原来写的是「开局 2025-03-14（300 根历史）」—— 日期直接漏给玩家了 */
+      $('ktTime').textContent='已开局 · '+T.bars.length+' 根历史数据（名称与日期结算后揭晓）';
+      const go=()=>{ paintAll();
+        toast('开局：先看历史 K 线。现在是第 1 天收盘，可按收盘价买入；点「下一阶段」到次日开盘。'); };
       if(window.echarts) go(); else if(typeof ensureECharts==='function') ensureECharts(go); else go();
     }catch(e){ hint.textContent='开局失败：'+(e.message||e); }
     finally{ ktBusy=false; }
   }
 
+  /* ---------- 遮罩：玩的时候不给看标的与日期（2026-09-20 要求） ----------
+     看到名字或日期等于开了天眼（知道是哪只票、哪一年哪一段），训练就失去意义。
+     规则：面板只写「第 N 天」；横轴只写相对刻度（0 = 当前这根，-N = N 根之前）；
+     tooltip 只写「第 N 天 / T-K」；真实名称与日期只在结算面板里揭晓。 */
+  const MASK_NAME='神秘标的';
+  /* gi = T.bars 里的绝对下标 → 「第 N 天」（N≥1 为可交易日，≤0 为开局前的历史 K） */
+  function barLabel(gi){ const dn=gi-T.start+1; return dn>=1?('第 '+dn+' 天'):('T'+(dn-1)); }
+  /* ---------- 时点（2026-09-20 改玩法）----------
+     一个交易日分两段：开盘段 → 收盘段。价格由**当前阶段**决定，玩家不再自选成交价
+     （成交价就是「你按下手的那一刻」）。开盘段只披露当日开盘价，当日高/低/收一律不给看。 */
+  function curPx(){ const b=T.bars[T.cur]; return T.ph==='open'? b.o : b.c; }
+  function phaseName(){ return T.ph==='open'?'开盘':'收盘'; }
+  /* 一字板的提示要分阶段说（2026-09-20）：
+     开盘段只该说「开盘就封住了」，不能讲「全天封死」—— 那是当日形态，属于未来信息。
+     判定本身仍用整日 h===l（现实里一字板开盘就买不到，这里取保守口径）。 */
+  function flatToast(word){
+    const b=T.bars[T.cur];
+    return (T.ph==='open'? ('开盘一字板（封在 '+f2(b.o)+'）') : ('一字板（全天封死 '+f2(b.o)+'）'))+'，'+word;
+  }
+  /* ---------- 排位（成绩上排行榜）----------
+     身份与聊天区共用：td_uid 是本机标识、td_nick 是聊天昵称。训练模块是独立 IIFE，
+     拿不到聊天模块的作用域，所以这里直接读 localStorage（聊天模块开机就会写好）。 */
+  const RANK_API='https://api.conglingkaishi3674.com';
+  function myUid(){ try{ return localStorage.getItem('td_uid')||''; }catch(e){ return ''; } }
+  function myNick(){ try{ return localStorage.getItem('td_nick')||'匿名'; }catch(e){ return '匿名'; } }
+
   /* ---------- 渲染：K 线（只喂已披露数据） ---------- */
   function paint(){
     const upto=T.bars.slice(0,T.cur+1);                // ⭐ 未来数据在这里就被切掉
+    /* ⭐ 开盘段只披露当日开盘价：把当日那根压成「开=高=低=收」的一个点、量能给 0。
+       均线也在这份「已知信息」上算 —— 否则 MA 会把当日收盘偷偷带出来（成交额同理）。 */
+    const partial=(T.ph==='open');
+    const vis=upto.slice();
+    if(partial){ const b0=T.bars[T.cur];
+      vis[vis.length-1]={t:b0.t,o:b0.o,h:b0.o,l:b0.o,c:b0.o,v:0,a:0}; }
     const i0=Math.max(0,T.start-HEAD);
-    const feed=upto.slice(i0);
+    const feed=vis.slice(i0);
     const dates=[]; const candles=[];
-    for(let i=0;i<feed.length;i++){ dates.push(feed[i].t); candles.push([feed[i].o,feed[i].c,feed[i].l,feed[i].h]); }
+    const rev=!!T.reveal;                              // 结算后揭晓：真实日期才放回横轴
+    for(let i=0;i<feed.length;i++){
+      /* 横轴直接写相对刻度而不是真实日期：ECharts 的轴标签、悬停时的轴指示标签都会
+         取这个 category 值，只改 axisLabel.formatter 是堵不住的（轴指示仍会漏日期）。 */
+      const off=i-(feed.length-1);
+      dates.push(rev?feed[i].t:(off===0?'0':String(off)));
+      candles.push([feed[i].o,feed[i].c,feed[i].l,feed[i].h]);
+    }
     const mas={5:[],10:[],20:[],60:[]};
     for(let k=0;k<feed.length;k++){ const gi=i0+k;
-      for(const n of [5,10,20,60]) mas[n].push(maAt(upto,n,gi)); }
-    const amtOk=feed.filter(r=>r.a>0).length>=feed.length*0.9;
+      for(const n of [5,10,20,60]) mas[n].push(maAt(vis,n,gi)); }
+    /* 量能口径自检不算那根还没走完的（它天生没有成交额，算进去会把比例压偏） */
+    const amtRef=partial? feed.slice(0,feed.length-1) : feed;
+    const amtOk=amtRef.filter(r=>r.a>0).length>=amtRef.length*0.9;
     const vols=[];
     for(let i=0;i<feed.length;i++){ const r=feed[i];
       vols.push({value:(amtOk?(r.a||0):(r.v||0)), itemStyle:{color:r.c>=r.o?UP:DN}}); }
@@ -4534,8 +4762,9 @@ setInterval(()=>{
     const mp=[];
     for(const tr of T.trades){
       if(tr.i<i0||tr.i>T.cur) continue;
-      const b=T.bars[tr.i], isB=tr.type==='B';
-      mp.push({coord:[tr.i-i0, isB?b.l:b.h], symbol:isB?'triangle':'diamond', symbolSize:11,
+      const isB=tr.type==='B';
+      /* ⭐ 锚点用成交价本身，而不是当日最低/最高 —— 开盘段那根的高低还没披露 */
+      mp.push({coord:[tr.i-i0, tr.price], symbol:isB?'triangle':'diamond', symbolSize:11,
         symbolOffset:[0,isB?11:-11], itemStyle:{color:isB?UP:DN,borderColor:'#fff',borderWidth:1},
         label:{show:true,formatter:tr.type+' '+f2(tr.price),position:isB?'bottom':'top',fontSize:10,color:'#fff'}}); }
     /* 持仓时叠一条成本虚线 */
@@ -4552,7 +4781,7 @@ setInterval(()=>{
           const i=ps[0].dataIndex, b=feed[i];
           if(!b) return '';
           const pv=i>0?feed[i-1].c:b.o, chg=(b.c-pv)/pv*100;
-          const l=['<b>'+b.t+'</b>','开 '+f2(b.o)+'　收 <b>'+f2(b.c)+'</b>','高 '+f2(b.h)+'　低 '+f2(b.l),
+          const l=['<b>'+(T.reveal? b.t : barLabel(i0+i))+'</b>','开 '+f2(b.o)+'　收 <b>'+f2(b.c)+'</b>','高 '+f2(b.h)+'　低 '+f2(b.l),
             '涨跌 <span style="color:'+(chg>=0?UP:DN)+'">'+sgn(chg)+'%</span>',
             (amtOk?'成交额 ':'成交量 ')+amtFmt(amtOk?(b.a||0):(b.v||0))];
           for(const n of [5,10,20,60]){ const v=mas[n][i]; if(v!=null) l.push('MA'+n+' <span style="color:'+MA_COLOR[n]+'">'+f2(v)+'</span>'); }
@@ -4574,9 +4803,9 @@ setInterval(()=>{
         {type:'bar',xAxisIndex:1,yAxisIndex:1,data:vols,barMaxWidth:14}
       ]
     },true);
-    /* 顶部一行均线数值（跟随最后一根已披露 K） */
+    /* 顶部一行均线数值（跟随最后一根已披露 K —— 开盘段用遮罩后的 vis，别用 upto） */
     const parts=[];
-    for(const n of [5,10,20,60]){ const v=maAt(upto,n,T.cur);
+    for(const n of [5,10,20,60]){ const v=maAt(vis,n,T.cur);
       if(v!=null) parts.push('<span style="color:'+MA_COLOR[n]+'">MA'+n+' '+f2(v)+'</span>'); }
     $('ktMa').innerHTML=parts.join('　');
   }
@@ -4584,51 +4813,74 @@ setInterval(()=>{
   /* ---------- 渲染：右侧账户面板 ---------- */
   function paintSide(){
     const b=T.bars[T.cur], pv=T.cur>0?T.bars[T.cur-1].c:b.o;
-    const chg=(b.c-pv)/pv*100, hasAmt=b.a>0;
-    $('ktName').textContent=T.sym.name;
-    $('ktMode').textContent=MODE_NAME[T.kind]||T.kind;
-    $('ktPx').innerHTML=f2(b.c)+' <span class="'+cls(chg)+'">'+sgn(chg)+'%</span>';
-    $('ktAmt').textContent=amtFmt(hasAmt?b.a:b.v);
+    const px=curPx(), partial=(T.ph==='open'), chg=(px-pv)/pv*100;
+    $('ktName').textContent=T.reveal?T.sym.name:MASK_NAME;
+    $('ktMode').textContent=(MODE_NAME[T.kind]||T.kind)+(T.rank?' · 排位':'');
+    $('ktPx').innerHTML=f2(px)+' <span class="'+cls(chg)+'">'+sgn(chg)+'%</span>';
+    /* 开盘段当日成交额还没出来 —— 不能拿未来的量能暗示当天走势 */
+    $('ktAmt').textContent=partial?'—（等收盘）':amtFmt(b.a>0?b.a:b.v);
     const day=T.cur-T.start+1;
-    $('ktProg').textContent='第 '+day+' / '+MAX_DAYS+' 天 · '+b.t;
-    $('ktDay').textContent='第 '+day+' / '+MAX_DAYS+' 天 · '+b.t;
-    const eq=T.cash+T.sh*b.c, ret=(eq-INIT_CASH)/INIT_CASH*100;
+    /* 只写「第 N 天 · 阶段」——真实日期玩的时候不给看（结算面板才揭晓） */
+    const dayTxt='第 '+day+' / '+MAX_DAYS+' 天 · '+phaseName()+(T.reveal?(' · '+b.t):'');
+    $('ktProg').textContent=dayTxt;
+    $('ktDay').textContent=dayTxt;
+    const eq=T.cash+T.sh*px, ret=(eq-INIT_CASH)/INIT_CASH*100;
     $('ktEq').textContent=yuan(eq);
     $('ktRet').innerHTML='<span class="'+cls(ret)+'">'+sgn(ret)+'%</span>（'+sgn(eq-INIT_CASH)+' 元）';
     $('ktDd').textContent=f2(maxDD(T.equity.map(function(p){return p.v;})))+'%';
     $('ktCash').textContent=yuan(T.cash);
-    $('ktPos').textContent=T.sh>0?(T.sh.toLocaleString('en-US')+' 股 · 成本 '+f2(T.cost)):'空仓';
-    const fl=T.sh>0?(b.c-T.cost)*T.sh:0;
+    /* ⚠ id 必须是 ktPosCost：大厅那个「起点位置」下拉框也叫 ktPos，
+       写重了 getElementById 只会拿到下拉框 —— 持仓行永远不更新，
+       而且往 <select> 写 textContent 会把它的 <option> 全删掉。 */
+    $('ktPosCost').textContent=T.sh>0?(T.sh.toLocaleString('en-US')+' 股 · 成本 '+f2(T.cost)):'空仓';
+    const fl=T.sh>0?(px-T.cost)*T.sh:0;
     $('ktFloat').innerHTML=T.sh>0?'<span class="'+cls(fl)+'">'+sgn(fl)+' 元</span>':'—';
-    /* 按钮可用性：持仓禁买 / T+1 禁卖 / 第 90 天禁推进（改点「结算并结束」） */
+    /* 时点提示：价格由阶段决定，玩家不用（也不能）自选 */
+    const pb=$('ktPhaseBox'), pt=$('ktPhase'), tip=$('ktPhaseTip');
+    if(pt) pt.textContent=phaseName()+'　'+(partial?f2(b.o):f2(b.c));
+    if(pb) pb.className='kt-phase'+(partial?'':' cls');
+    const lastDay=day>=MAX_DAYS, dataEnd=T.cur>=T.bars.length-1;
+    if(tip) tip.textContent = partial
+      ? '只能按开盘价动手；点「下一阶段」看当日收盘。'
+      : (lastDay||dataEnd ? '已到最后一个交易时点 —— 点「结算并结束」收尾。'
+                          : '只能按收盘价动手；点「下一阶段」到次日开盘。');
+    /* 按钮可用性：持仓禁买 / T+1 禁卖 / 最后一个时点禁推进 */
     $('ktBuy').disabled=T.sh>0;
     $('ktSell').disabled=!(T.sh>0&&T.buyAt<T.cur);
-    $('ktNext').disabled=day>=MAX_DAYS;
-    $('ktEnd').textContent=(day>=MAX_DAYS)?'最后一日 · 点此结算':'结算并结束';
+    $('ktNext').disabled=(!partial)&&(lastDay||dataEnd);
+    $('ktEnd').textContent=lastDay?'最后一日 · 点此结算':'结算并结束';
   }
   function paintAll(){ paint(); paintSide(); }
 
-  /* ---------- 操作 ---------- */
-  function logRow(type,t,price,sh){
+  /* ---------- 操作记录 ----------
+     txt 玩的时候传「第 N 天」、结算后传真实日期（replayLog 重放）—— 同一个渲染函数。 */
+  function logRow(type,txt,price,sh){
     const el=$('ktLog'); const empty=el.querySelector('.kt-empty'); if(empty) empty.remove();
     const r=document.createElement('div'); r.className='r';
     const d=document.createElement('span');
-    d.textContent=(type==='B'?'买入 ':'卖出 ')+t+(type==='S2'?'（届满强平）':'');
+    d.textContent=(type==='B'?'买入 ':'卖出 ')+txt+(type==='S2'?'（届满强平）':'');
     const v=document.createElement('b'); v.className=type==='B'?'kt-up':'kt-dn';
     v.textContent=f2(price)+' × '+sh.toLocaleString('en-US');
     r.appendChild(d); r.appendChild(v); el.insertBefore(r,el.firstChild);
   }
+  /* 结算后把整份记录按真实日期重放一遍（logRow 往最上面插，所以按时间正序遍历即可） */
+  function replayLog(){
+    const el=$('ktLog'); if(!el) return;
+    el.innerHTML='';
+    if(!T.trades.length){ el.innerHTML='<div class="kt-empty">本局没有交易</div>'; return; }
+    for(const tr of T.trades) logRow(tr.type, T.bars[tr.i].t, tr.price, tr.sh);
+  }
   function doBuy(){
     if(!T||T.sh>0){ if(T) toast('已持仓 —— 先卖出再买'); return; }
     const b=T.bars[T.cur];
-    if(b.h===b.l){ toast('一字板（全天封死 '+f2(b.o)+'），买不进'); return; }
-    const price=T.pm==='open'?b.o:b.c;
+    if(b.h===b.l){ toast(flatToast('买不进')); return; }
+    const price=curPx();
     const lots=Math.floor(T.cash/(price*100));
     if(lots<1){ toast('现金不足一手'); return; }
     T.sh=lots*100; T.cost=price; T.cash-=T.sh*price; T.buyAt=T.cur;
     T.trades.push({i:T.cur,type:'B',price:price,sh:T.sh});
-    logRow('B',b.t,price,T.sh);
-    toast('买入 '+T.sh.toLocaleString('en-US')+' 股 @ '+f2(price)+(T.pm==='open'?'（开盘）':'（收盘）')+' · 明日可卖');
+    logRow('B',barLabel(T.cur)+'　'+phaseName(),price,T.sh);
+    toast('买入 '+T.sh.toLocaleString('en-US')+' 股 @ '+f2(price)+'（'+phaseName()+'价）· 明日可卖');
     paintAll();
   }
   function doSell(){
@@ -4636,22 +4888,30 @@ setInterval(()=>{
     if(!T.sh){ toast('当前空仓，先买入'); return; }
     if(T.buyAt===T.cur){ toast('T+1：当日买入，次日才能卖'); return; }
     const b=T.bars[T.cur];
-    if(b.h===b.l){ toast('一字板（全天封死 '+f2(b.o)+'），卖不出'); return; }
-    const price=T.pm==='open'?b.o:b.c;
+    if(b.h===b.l){ toast(flatToast('卖不出')); return; }
+    const price=curPx();
     T.cash+=T.sh*price;
     T.trades.push({i:T.cur,type:'S',price:price,sh:T.sh});
-    logRow('S',b.t,price,T.sh);
-    toast('卖出 '+T.sh.toLocaleString('en-US')+' 股 @ '+f2(price));
+    logRow('S',barLabel(T.cur)+'　'+phaseName(),price,T.sh);
+    toast('卖出 '+T.sh.toLocaleString('en-US')+' 股 @ '+f2(price)+'（'+phaseName()+'价）');
     T.sh=0; T.cost=0; T.buyAt=-1;
     paintAll();
   }
+  /* 推进一个阶段：开盘段 → 当日收盘段（同一天）；收盘段 → 次日开盘段（跨天）。
+     ⚠ 资产曲线只在「收盘段」采样（那一天的收盘价才是已知的），
+     否则开盘段就把当日收盘写进 equity，侧栏的最大回撤会提前泄底。 */
   function doNext(){
     if(!T) return;
-    if(T.cur-T.start+1>=MAX_DAYS){ toast('已是第 '+MAX_DAYS+' 天，点「结算并结束」收尾'); return; }
+    const day=T.cur-T.start+1;
+    if(T.ph==='open'){                                  // 开盘 → 收盘（同一天）
+      T.ph='close';
+      const b=T.bars[T.cur];
+      T.equity.push({t:b.t,v:T.cash+T.sh*b.c});
+      paintAll(); return;
+    }
+    if(day>=MAX_DAYS){ toast('已是第 '+MAX_DAYS+' 天的收盘，点「结算并结束」收尾'); return; }
     if(T.cur>=T.bars.length-1){ finish('行情数据到头'); return; }
-    T.cur++;
-    const b=T.bars[T.cur];
-    T.equity.push({t:b.t,v:T.cash+T.sh*b.c});
+    T.cur++; T.ph='open';                               // 收盘 → 次日开盘（跨天）
     paintAll();
   }
 
@@ -4659,25 +4919,52 @@ setInterval(()=>{
   function finish(reason){
     if(!T) return;
     const b=T.bars[T.cur];
-    if(T.sh>0){                                        // 届满/手动结算时未平仓 → 按当日收盘强平
-      const px=b.c; T.cash+=T.sh*px;
+    if(T.sh>0){                                        // 未平仓 → 按「当前时点」的价格强平
+      const px=curPx(); T.cash+=T.sh*px;
       T.trades.push({i:T.cur,type:'S',price:px,sh:T.sh});
-      logRow('S2',b.t,px,T.sh);
+      logRow('S2',barLabel(T.cur)+'　'+phaseName(),px,T.sh);
       T.sh=0; T.cost=0; T.buyAt=-1;
     }
     const ret=(T.cash-INIT_CASH)/INIT_CASH*100;
-    const base=T.bars[T.start].c, bh=(b.c-base)/base*100;   // 基准：起点收盘买入持有到终点
+    /* 基准：起点收盘买入持有到**本次结算时点的价格** —— 和玩家用的是同一个价，才公平 */
+    const base=T.bars[T.start].c, bh=(curPx()-base)/base*100;
     /* 补上结算当天的资产点，让回撤曲线完整到最后一根 */
     if(!T.equity.length||T.equity[T.equity.length-1].t!==b.t) T.equity.push({t:b.t,v:T.cash});
     const dd=maxDD(T.equity.map(function(p){return p.v;}));
-    /* 战绩入库（仅本浏览器） */
+    /* 战绩入库（仅本浏览器）。汇总 + 逐局明细：明细要能看到每局是谁、赚了多少。
+       明细里的日期是**结算后的真实日期**（玩的时候本来就揭晓了），不存在开天眼问题。 */
+    /* 交易动作统计：总笔数 / 买入次数 / 总持仓天数（买入日→卖出日的交易日数，按笔累加）。
+       一次只持一份仓（全仓），所以按顺序把 B…S 配对即可；最后没平掉的算到结算日为止。 */
+    let holdSum=0, bn=0, openB=-1;
+    for(const tr of T.trades){
+      if(tr.type==='B'){ bn++; openB=tr.i; }
+      else if(openB>=0){ holdSum+=tr.i-openB; openB=-1; }
+    }
+    if(openB>=0) holdSum+=T.cur-openB;
+    let rec=null;
     try{
       const s=Object.assign({n:0,win:0,sum:0,best:-1e9,worst:1e9},JSON.parse(localStorage.getItem('kt_stats_v1')||'{}'));
       s.n++; if(ret>0) s.win++; s.sum+=ret;
       if(ret>s.best) s.best=ret; if(ret<s.worst) s.worst=ret;
+      rec={n:T.sym.name, c:T.sym.code||'', r:+ret.toFixed(2), b:+bh.toFixed(2),
+           d:T.cur-T.start+1, f:T.bars[T.start].t, e:T.bars[T.cur].t,
+           k:MODE_NAME[T.kind]||T.kind, at:Date.now(),
+           tn:T.trades.length, bn:bn, hd:holdSum, ms:+dd.toFixed(2)};
+      if(!Array.isArray(s.list)) s.list=[];
+      s.list.push(rec);
       localStorage.setItem('kt_stats_v1',JSON.stringify(s));
     }catch(e){}
+    /* 结算 = 揭晓：标的名称、真实日期、操作记录里的日期一次性放出来 */
+    T.reveal=true; paintAll(); replayLog();
     showOver({reason:reason,ret:ret,eq:T.cash,bh:bh,dd:dd,days:T.cur-T.start+1,n:T.trades.length});
+    /* 排位：成绩上排行榜（尽力而为，失败不影响结算面板）。uid/昵称与聊天区同一套。 */
+    if(T.rank){ try{
+      const body=JSON.stringify({uid:myUid(),nick:myNick(),code:T.sym.code||'',name:T.sym.name,
+        ret:+ret.toFixed(2),days:T.cur-T.start+1,bn:bn,hd:holdSum,ms:+dd.toFixed(2),
+        f:T.bars[T.start].t,e:T.bars[T.cur].t});
+      fetch(RANK_API+'/v1/rank',{method:'POST',headers:{'Content-Type':'application/json'},body:body})
+        .then(function(){ loadRank(); }).catch(function(){});
+    }catch(e){} }
   }
   function showOver(r){
     $('ktOver').style.display='flex';
@@ -4691,6 +4978,7 @@ setInterval(()=>{
       row('盈亏金额',sgn(r.eq-INIT_CASH)+' 元')+
       row('买卖次数',r.n+' 笔')+
       row('历时',r.days+' 个交易日')+
+      row('结算时点','第 '+r.days+' 天 '+phaseName()+'（强平/基准同价）')+
       row('最大回撤',f2(r.dd)+'%')+
       row('买入持有基准','<span class="'+cls(r.bh)+'">'+sgn(r.bh)+'%</span>')+
       row('相对基准','<span class="'+cls(r.ret-r.bh)+'">'+sgn(r.ret-r.bh)+'%</span>');
@@ -4719,16 +5007,58 @@ setInterval(()=>{
   $('ktGoEtf').onclick=function(){ startGame('etf'); };
   $('ktGoCode').onclick=function(){ startGame('code'); };
   $('ktCode').addEventListener('keydown',function(e){ if(e.key==='Enter') startGame('code'); });
-  const pms=document.querySelectorAll('.kt-pm-btn');
-  for(let i=0;i<pms.length;i++){
-    pms[i].onclick=function(){
-      for(let j=0;j<pms.length;j++) pms[j].classList.remove('on');
-      this.classList.add('on');
-      if(T) T.pm=this.getAttribute('data-pm');
-      toast('成交价：'+(T&&T.pm==='open'?'当日开盘价':'当日收盘价'));
+  /* 成交价不再由玩家选：价格 = 当前时点（开盘段按开盘价、收盘段按收盘价）。
+     原来那组「按开盘 / 按收盘」按钮已删除，避免和阶段语义打架。 */
+  $('ktNext').onclick=doNext;
+  $('ktGoRank').onclick=function(){ startGame('rank'); };
+  /* ---------- 排行榜 ---------- */
+  let rankMode='best';
+  function renderRank(j){
+    const box=$('ktRankList'); if(!box) return;
+    const top=j.top||[];
+    if(!top.length){
+      box.innerHTML='<div class="kt-empty">还没有人上榜 —— 打一局排位，当第一个。</div>';
+    }else{
+      box.innerHTML='<div class="kt-rank-head"><span>名次</span><span>昵称</span><span>最佳</span><span>场次</span><span>平均</span></div>'
+        +top.map(function(r){
+          return '<div class="kt-rank-row'+(r.rank<=3?' top':'')+'">'
+            +'<span class="rk">'+(r.rank<=3?'🏆 ':'')+r.rank+'</span>'
+            +'<span class="nm">'+escT(r.nick)+'</span>'
+            +'<span class="bs '+cls(r.best)+'">'+sgn(r.best)+'%</span>'
+            +'<span class="g">'+r.games+' 场</span>'
+            +'<span class="av '+cls(r.avg)+'">'+sgn(r.avg)+'%</span></div>';
+        }).join('');
+    }
+    const tot=$('ktRankTotal'); if(tot) tot.textContent='（共 '+j.total+' 人）';
+    const me=$('ktRankMe');
+    if(me) me.innerHTML=j.me
+      ? ('我的排名　<b>第 '+j.me.rank+' 名</b>　最佳 <b class="'+cls(j.me.best)+'">'+sgn(j.me.best)+'%</b>　'
+        +j.me.games+' 场　平均 '+sgn(j.me.avg)+'%')
+      : '还没有上榜 —— 打一局排位就有了';
+  }
+  function loadRank(){
+    const box=$('ktRankList'); if(!box) return;
+    if(typeof fetch!=='function') return;              // 沙箱/极老环境直接跳过
+    fetch(RANK_API+'/v1/rank?mode='+rankMode+'&uid='+encodeURIComponent(myUid()),{cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if(j&&j.ok) renderRank(j); })
+      .catch(function(){ box.innerHTML='<div class="kt-empty">排行榜暂时连不上，稍后再看</div>'; });
+  }
+  /* 口径切换 */
+  const rtabs=$('ktRankTabs');
+  if(rtabs){
+    const bs=rtabs.querySelectorAll('button');
+    for(let i=0;i<bs.length;i++) bs[i].onclick=function(){
+      rankMode=this.getAttribute('data-m');
+      for(let j=0;j<bs.length;j++) bs[j].classList.toggle('on',bs[j]===this);
+      loadRank();
     };
   }
-  $('ktNext').onclick=doNext;
+  /* 进「模拟 · 排位」这个模块时刷新一次榜单（挂在侧栏按钮的点击上，页面加载不空打） */
+  document.addEventListener('click',function(e){
+    const t=e.target&&e.target.closest? e.target.closest('[data-tab="soon"]') : null;
+    if(t) loadRank();
+  });
   $('ktBuy').onclick=doBuy;
   $('ktSell').onclick=doSell;
   $('ktEnd').onclick=function(){ if(T) finish('手动结算'); };
