@@ -4849,6 +4849,8 @@ setInterval(()=>{
     $('ktSell').disabled=!(T.sh>0&&T.buyAt<T.cur);
     $('ktNext').disabled=(!partial)&&(lastDay||dataEnd);
     $('ktEnd').textContent=lastDay?'最后一日 · 点此结算':'结算并结束';
+    /* 退出按钮的语义随模式变：排位没有「不结算」这个选项，退出=强制结算 */
+    $('ktQuit').textContent=T.rank?'退出 · 强制结算':'退出训练';
   }
   function paintAll(){ paint(); paintSide(); }
 
@@ -5062,8 +5064,21 @@ setInterval(()=>{
   $('ktBuy').onclick=doBuy;
   $('ktSell').onclick=doSell;
   $('ktEnd').onclick=function(){ if(T) finish('手动结算'); };
-  /* 退出不做成绩，两段确认防误触 */
+  /* 退出：模拟局不做成绩（两段确认防误触）；排位局没有「不结算」这个选项 ——
+     退出就是按当前时点强制结算，成绩照记照上榜（2026-09-20 定）。 */
   $('ktQuit').onclick=function(){
+    if(T&&T.rank){                                       // 排位：退出 = 强制结算
+      const now2=Date.now();
+      if(now2-quitArm<3000){
+        quitArm=0; this.textContent='退出 · 强制结算';
+        finish('排位中途退出 · 按当前时点强制结算');
+        return;
+      }
+      quitArm=now2; this.textContent='再点一次确认退出（强制结算，成绩有效）';
+      const btn=this;
+      setTimeout(function(){ if(Date.now()-quitArm>=2900) btn.textContent='退出 · 强制结算'; },3100);
+      return;
+    }
     const now=Date.now();
     if(now-quitArm<3000){
       quitArm=0; this.textContent='退出训练';
