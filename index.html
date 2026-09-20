@@ -453,7 +453,7 @@
    border-radius:8px;padding:3px 9px;cursor:pointer;font:inherit;font-size:11px}
  .kt-rank-tabs button.on{color:#fff;border-color:var(--blue);background:rgba(95,168,255,.18)}
  .kt-rank{max-height:min(46vh,420px);overflow:auto;font-size:12px}
- .kt-rank-head,.kt-rank-row{display:grid;grid-template-columns:44px 1fr 74px 52px 62px;gap:6px;
+ .kt-rank-head,.kt-rank-row{display:grid;grid-template-columns:44px 1fr 76px 74px 52px 62px;gap:6px;
    align-items:center;padding:6px 2px}
  .kt-rank-head{color:var(--muted);font-size:11px;border-bottom:1px solid var(--line)}
  .kt-rank-row{border-bottom:1px solid rgba(255,255,255,.06)}
@@ -843,13 +843,13 @@
       <button class="btn kt-mode kt-rank-go" id="ktGoRank">🏆 排位 · 随机个股</button>
       <div class="kt-hint" id="ktRankHint">规则与模拟完全一致 —— 区别只有一个：结算后成绩自动记进右边的排行榜。</div>
       <div class="kt-rules">
-       <b>排位规则</b> 只有<b>随机个股</b>一种（自定义代码与 ETF 不计入排位）；同样是随机起点、90 个交易日、两段推进。榜上按<b>最佳收益 / 平均收益 / 场次</b>三种口径排序，只显示昵称（就是聊天区那个名字，点右栏名字可改）。
+       <b>排位规则</b> 只有<b>随机个股</b>一种（自定义代码与 ETF 不计入排位）；同样是随机起点、90 个交易日、两段推进。榜上按<b>总收益 / 最佳收益 / 平均收益 / 场次</b>排序 —— 总收益是各局收益<b>复利累乘</b>（每局都是 100 万全仓起步，滚着算才等于真实资金曲线），只显示昵称（就是聊天区那个名字，点右栏名字可改）。
       </div>
      </div>
      <div class="kt-lobby-right">
       <div class="kt-lobby-title">训练排行榜 <span class="kt-sub" id="ktRankTotal"></span>
        <span class="kt-rank-tabs" id="ktRankTabs">
-        <button class="on" data-m="best">最佳收益</button><button data-m="avg">平均收益</button><button data-m="games">场次</button>
+        <button class="on" data-m="total">总收益</button><button data-m="best">最佳收益</button><button data-m="avg">平均收益</button><button data-m="games">场次</button>
        </span>
       </div>
       <div class="kt-rank" id="ktRankList">加载中…</div>
@@ -5014,19 +5014,20 @@ setInterval(()=>{
   $('ktNext').onclick=doNext;
   $('ktGoRank').onclick=function(){ startGame('rank'); };
   /* ---------- 排行榜 ---------- */
-  let rankMode='best';
+  let rankMode='total';
   function renderRank(j){
     const box=$('ktRankList'); if(!box) return;
     const top=j.top||[];
     if(!top.length){
       box.innerHTML='<div class="kt-empty">还没有人上榜 —— 打一局排位，当第一个。</div>';
     }else{
-      box.innerHTML='<div class="kt-rank-head"><span>名次</span><span>昵称</span><span>最佳</span><span>场次</span><span>平均</span></div>'
+      box.innerHTML='<div class="kt-rank-head"><span>名次</span><span>昵称</span><span>总收益</span><span>最佳</span><span>场次</span><span>平均</span></div>'
         +top.map(function(r){
           return '<div class="kt-rank-row'+(r.rank<=3?' top':'')+'">'
             +'<span class="rk">'+(r.rank<=3?'🏆 ':'')+r.rank+'</span>'
             +'<span class="nm">'+escT(r.nick)+'</span>'
-            +'<span class="bs '+cls(r.best)+'">'+sgn(r.best)+'%</span>'
+            +'<span class="bs '+cls(r.total)+'">'+sgn(r.total)+'%</span>'
+            +'<span class="av '+cls(r.best)+'">'+sgn(r.best)+'%</span>'
             +'<span class="g">'+r.games+' 场</span>'
             +'<span class="av '+cls(r.avg)+'">'+sgn(r.avg)+'%</span></div>';
         }).join('');
@@ -5034,8 +5035,8 @@ setInterval(()=>{
     const tot=$('ktRankTotal'); if(tot) tot.textContent='（共 '+j.total+' 人）';
     const me=$('ktRankMe');
     if(me) me.innerHTML=j.me
-      ? ('我的排名　<b>第 '+j.me.rank+' 名</b>　最佳 <b class="'+cls(j.me.best)+'">'+sgn(j.me.best)+'%</b>　'
-        +j.me.games+' 场　平均 '+sgn(j.me.avg)+'%')
+      ? ('我的排名　<b>第 '+j.me.rank+' 名</b>　总收益 <b class="'+cls(j.me.total)+'">'+sgn(j.me.total)+'%</b>　'
+        +'最佳 '+sgn(j.me.best)+'%　'+j.me.games+' 场　平均 '+sgn(j.me.avg)+'%')
       : '还没有上榜 —— 打一局排位就有了';
   }
   function loadRank(){
