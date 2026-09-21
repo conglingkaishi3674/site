@@ -5075,7 +5075,8 @@ setInterval(()=>{
   function backLobby(){
     T=null;
     $('ktLobby').style.display=''; $('ktPlay').style.display='none'; $('ktOver').style.display='none';
-    $('pvpWrap').style.display='';                       /* 对战面板跟着一起回来 */
+    const _show=function(id){ const e=$(id); if(e) e.style.display=''; };   /* 大厅各面板一起回来 */
+    _show('ktRank'); _show('pvpWrap');
     paintStats();
   }
   async function startGame(kind){
@@ -5114,7 +5115,11 @@ setInterval(()=>{
       T.start=(kind==='pvp'&&pick.start!=null)?pick.start:randStart(kind==='code'?posMode:'rand');
       T.cur=T.start;
       T.equity.push({t:T.bars[T.cur].t,v:INIT_CASH});
+      /* 进对局要把「大厅那一整屏」都收起来 —— 排位面板与匹配对战面板是**独立于 ktLobby**
+         的两个 panel，只隐藏 ktLobby 的话它们会叠在 K 线图上方（2026-09-21 反馈）。 */
       $('ktLobby').style.display='none';
+      const _hide=function(id){ const e=$(id); if(e) e.style.display='none'; };
+      _hide('ktRank'); _hide('pvpWrap');          /* 元素不在（老页面/测试桩）也不能抛错 */
       $('ktPlay').style.display='';
       $('ktOver').style.display='none';
       $('ktLog').innerHTML='<div class="kt-empty">尚未交易</div>';
