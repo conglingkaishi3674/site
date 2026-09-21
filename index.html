@@ -1123,8 +1123,8 @@ const CFG = {
   industry:false, top:8, intervalSec:300,
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
   /* 东财多节点容灾：盘中 push2his 常被封，逐个尝试，成功后记住该节点 */
-  hosts:["https://push2delay.eastmoney.com","https://push2.eastmoney.com",
-         "https://82.push2.eastmoney.com","https://48.push2.eastmoney.com"],
+  hosts:["https://push2delay.eastmoney.com","https://push2his.eastmoney.com",
+         "https://push2.eastmoney.com","https://82.push2.eastmoney.com","https://48.push2.eastmoney.com"],
   hostIdx:0,
   get host(){ return this.hosts[this.hostIdx]; }
 };
