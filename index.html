@@ -1181,6 +1181,16 @@ function jsonpVar(url, name){
   });
 }
 async function fetchAllSectors(industry){
+  /* 先走我们自己的中转：部分网络的运营商/风控会把浏览器到东财 push2* 的「列表类接口」
+     整体拒掉（表现为「网络/跨域失败」），而 K 线接口却正常。Worker 从 Cloudflare 边缘
+     代为取数就能绕开本地封锁，返回口径与直连完全一致（仍是主力净额 f62）；
+     中转失败才回退直连，两条路互为兜底。 */
+  try{
+    const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
+    const r=await fetch(base+'/v1/em/sectors?type='+(industry?'industry':'concept'),{cache:'no-store'});
+    const j=await r.json();
+    if(j&&j.ok&&j.list&&j.list.length) return j.list;
+  }catch(e){}
   const fs=industry?"m:90+t:2":"m:90+t:3";
   const errs=[];
   for(let hi=0;hi<CFG.hosts.length;hi++){
