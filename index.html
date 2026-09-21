@@ -228,6 +228,13 @@
  .pvp-res{text-align:center;font-size:20px;font-weight:700;margin:6px 0;color:#c8ccd3}
  .pvp-res.w{color:#ff6f83}
  .pvp-res.l{color:#2bd67b}
+ .pvp-ops{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 2px 8px;
+   font-size:12px;color:var(--muted);line-height:1.7;border-bottom:1px solid rgba(255,255,255,.06)}
+ .pvp-ops i{font-style:normal;color:var(--text);margin-right:4px}
+ .pvp-ops span{overflow:hidden}
+ .pvp-b{color:#ff6f83;font-weight:700;margin-right:2px}
+ .pvp-s{color:#2bd67b;font-weight:700;margin-right:2px}
+ .pvp-dim{color:var(--muted);opacity:.7}
  .pvp-rankwrap{margin-top:12px;border-top:1px dashed var(--line);padding-top:8px}
  .pvp-rank{max-height:260px;overflow:auto}
 
@@ -5480,8 +5487,12 @@ setInterval(()=>{
   async function pvpOnFinish(ret){
     if(!PVP.cur) return;
     PVP.rets[PVP.cur.i]=+ret.toFixed(2);
+    /* 本局的买卖操作（日期 / 方向 / 价格）一起上报，结算后双方可以互看 */
+    const trades=(T&&T.trades?T.trades:[]).slice(0,60).map(function(x){
+      return {d:(T.bars[x.i]&&T.bars[x.i].t)||'',t:x.type,p:+((+x.price||0).toFixed(2))};
+    });
     try{
-      await pvpCall('submit',{uid:myUid(),rid:PVP.rid,i:PVP.cur.i,ret:+ret.toFixed(2)});
+      await pvpCall('submit',{uid:myUid(),rid:PVP.rid,i:PVP.cur.i,ret:+ret.toFixed(2),trades:trades});
       const j=await pvpCall('finish',{uid:myUid(),rid:PVP.rid});
       PVP.st=await pvpCall('state',null,'?rid='+PVP.rid+'&uid='+encodeURIComponent(myUid()));
       pvpFightRender();
@@ -5496,6 +5507,14 @@ setInterval(()=>{
     if(!st.p2n&&PVP.mine===1){ pvpMsg('房间 '+PVP.rid+' 等待对手加入…（把号发给他）'); }
     pvpFightRender();
   }
+  /* 一局的操作明细 → 一行可读文本（买卖点对比用） */
+  function pvpTrHTML(list){
+    if(!list||!list.length) return '<span class="pvp-dim">还没有操作</span>';
+    return list.map(function(x){
+      return '<b class="pvp-'+(x.t==='S'?'s':'b')+'">'+(x.t==='S'?'卖':'买')+'</b>'+
+        escT(String(x.d||'').slice(5))+' '+x.p;
+    }).join('　');
+  }
   function pvpFightRender(){
     const st=PVP.st||{}, need=PVP.mode||1, me=PVP.mine||1;
     const p1n=st.p1n||'我', p2n=st.p2n||'（等待加入）';
@@ -5505,11 +5524,16 @@ setInterval(()=>{
       let h='<div class="pvp-vs"><b>'+escT(p1n)+'</b><span>vs</span><b>'+escT(p2n)+'</b></div>';
       h+='<div class="pvp-line">房间 <b>'+escT(PVP.rid)+'</b> · '+(PVP_MODE[need]||('BO'+need))+'</div>';
       h+='<div class="pvp-head"><span>局</span><span>我的收益</span><span>对手收益</span></div>';
+      const myT=(me===1?st.p1t:st.p2t)||[], opT=(me===1?st.p2t:st.p1t)||[];
       for(let k=0;k<need;k++){
         const a=myRet[k], b=opRet[k];
         h+='<div class="pvp-row"><span>第 '+(k+1)+' 局</span>'
           +'<span class="'+(a==null?'':cls(a))+'">'+(a==null?'—':sgn(a)+'%')+'</span>'
           +'<span class="'+(b==null?'':cls(b))+'">'+(b==null?'待打':sgn(b)+'%')+'</span></div>';
+        if(myT[k]||opT[k]){
+          h+='<div class="pvp-ops"><span><i>我</i> '+pvpTrHTML(myT[k])+'</span>'
+            +'<span><i>对手</i> '+pvpTrHTML(opT[k])+'</span></div>';
+        }
       }
       body.innerHTML=h;
     }
@@ -5531,12 +5555,18 @@ setInterval(()=>{
       h+='<div class="pvp-vs"><b>'+escT(st.p1n||'甲')+'</b><span>vs</span><b>'+escT(st.p2n||'乙')+'</b></div>';
       let s1=0,s2=0;
       h+='<div class="pvp-head"><span>局</span><span>'+escT(st.p1n||'甲')+'</span><span>'+escT(st.p2n||'乙')+'</span></div>';
+      const T1=st.p1t||[], T2=st.p2t||[];
       for(let k=0;k<need;k++){
         const x=a[k], y=b[k];
         if(x!=null&&y!=null){ if(x>y)s1++; else if(x<y)s2++; }
         h+='<div class="pvp-row"><span>第 '+(k+1)+' 局</span>'
           +'<span class="'+(x==null?'':cls(x))+'">'+(x==null?'—':sgn(x)+'%')+'</span>'
           +'<span class="'+(y==null?'':cls(y))+'">'+(y==null?'—':sgn(y)+'%')+'</span></div>';
+        /* 双方各自的买卖点，并排列出来做对比（同一只标的，直接可比） */
+        if(T1[k]||T2[k]){
+          h+='<div class="pvp-ops"><span><i>'+escT(st.p1n||'甲')+'</i> '+pvpTrHTML(T1[k])+'</span>'
+            +'<span><i>'+escT(st.p2n||'乙')+'</i> '+pvpTrHTML(T2[k])+'</span></div>';
+        }
       }
       h+='<div class="pvp-line">比分 <b>'+s1+' : '+s2+'</b>'+(st.winner==='tie'?' · 平局':'')+'</div>';
       body.innerHTML=h;
