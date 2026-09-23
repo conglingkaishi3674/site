@@ -306,6 +306,15 @@
  .mkt-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
  .mkt-cols>.panel{margin-bottom:0}
  .mkt-cols>.panel:only-child{grid-column:1 / -1}   /* 只剩一张表时占满整行，别缩在半边 */
+ /* 板块数据页签：筛选条 + 可横向滚动的宽表（列多，窄屏让它滚而不是挤成一团） */
+ .sec-filter{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+ .sec-filter input{background:var(--bg-soft);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:3px 7px;font-size:12px;width:62px}
+ .sec-seg{display:flex;gap:5px}
+ .sec-seg button{background:var(--bg-soft);border:1px solid var(--line);color:var(--muted);border-radius:7px;
+   padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+ .sec-seg button.on{color:#fff;border-color:rgba(255,255,255,.42);background:rgba(255,255,255,.08)}
+ .sec-wrap{overflow-x:auto}
+ .sec-wrap table{min-width:1080px;font-size:12px}
  @media(max-width:900px){.mkt-cols{grid-template-columns:1fr}}
  .mkt-f4{font-size:16px !important;font-weight:600;margin-top:4px}
  .mkt-f4r{font-size:12px;margin-top:2px}
@@ -1009,6 +1018,7 @@
     <button class="on" data-db="ccpm">股指期货持仓</button>
     <button data-db="lhb">龙虎榜 · 席位</button>
     <button data-db="mkt">大盘数据</button>
+    <button data-db="sector">板块数据</button>
    </div>
 
    <div class="db-toolbar">
@@ -1615,10 +1625,18 @@ let lastFlowOk=0;   // 上次板块资金流抓取发起时刻，供后台保活
 function flowIntervalSec(){ return tradingNow(new Date()) ? 60 : 300; }
 function fmt(v){return (v>=0?"+":"")+v.toFixed(1)+"亿";}
 /* ---- 数字瘦身：按数量级自适应位数，杜绝 1308.0033333 这类长尾小数 ---- */
+/* ETF / LOF（场内基金）报价到**三位**小数（如 1.234），股票是两位 —— 交易所报价规则不一样。
+   旧版只按数值大小自适应，而 ETF 多在 0.5~3 元区间，正好落在「>=1 用两位」这一档，
+   跟行情软件的读数对不上。代码段：沪市 5xxxxx、深市 15xxxx/16xxxx。 */
+function _isFundCode(c){ return /^(5\d{5}|1[56]\d{4})$/.test(String(c||"")); }
 /* 价格显示：行情软件默认两位小数，四位数的票（茅台 1273.93）也保留到分。
    旧版 >=1000 只留 1 位小数 → 1273.93 显示成 1273.9，跟软件读数对不上，看着就像数据错了。 */
 function px(v){
   if(v==null||isNaN(v)) return "--";
+  /* curStock 声明在本文件后段，这里用 try 兜住「声明前就被调用」的 TDZ（目前没有这种调用，别埋雷） */
+  let fund=false;
+  try{ fund=!!(curStock&&_isFundCode(curStock.code)); }catch(e){}
+  if(fund) return (+v).toFixed(3);
   const a=Math.abs(v);
   return a>=1? v.toFixed(2) : a>=0.1? v.toFixed(3) : v.toFixed(4);
 }
@@ -2468,8 +2486,10 @@ function drawPickChart(data,sym){
   const dates=view.map(d=>d.t);
   /* 价格统一两位小数：A 股最小变动是 0.01，前复权多算出来的小数位对图形没有意义，
      却会让 tooltip 和纵轴显示成一长串数字 */
-  const r2=v=>v==null?null:+v.toFixed(2);
-  const fmt2=v=>(v==null||!isFinite(v))?"--":(+v).toFixed(2);
+  /* ETF 报价三位小数、股票两位 —— 这里的 sym 就是图上那只标的，按它判 */
+  const dp=(sym&&_isFundCode(sym.code))?3:2;
+  const r2=v=>v==null?null:+v.toFixed(dp);
+  const fmt2=v=>(v==null||!isFinite(v))?"--":(+v).toFixed(dp);
   /* 涨跌停着色必须按全量判定再切窗，否则可见区间首根缺前收会漏标 */
   const limTier=limitTierOf(sym||{});          /* 档位（主板 10cm / 双创股·双创ETF 20cm / 北交所 30cm / 宽基 ETF 10cm） */
   const limPct=limTier.p, limTag=limTier.tag;  /* 标进 tooltip，说明按哪一档判的 */
@@ -2532,7 +2552,7 @@ function drawPickChart(data,sym){
       axisLabel:{color:"#a5abb4",fontSize:10}},
     yAxis:{scale:true,
       axisLine:{show:false},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}},
-      axisLabel:{color:"#a5abb4",fontSize:10,formatter:v=>(+v).toFixed(2)}},
+      axisLabel:{color:"#a5abb4",fontSize:10,formatter:v=>(+v).toFixed(dp)}},
     dataZoom:[{type:"inside",start:70,end:100},
       {type:"slider",height:18,bottom:10,borderColor:"rgba(255,255,255,.12)",
        textStyle:{color:"#a5abb4",fontSize:10}}],
@@ -3554,6 +3574,7 @@ async function dbLoad(dir){
   dir=dir||0;
   /* 大盘数据是「整段快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 走独立路径 */
   if(DB.tab==='mkt'){ await dbLoadMkt(); DB.busy=false; return; }
+  if(DB.tab==='sector'){ await dbLoadSector(); DB.busy=false; return; }
   const hint=document.getElementById('dbHint'), box=document.getElementById('dbBody');
   const sel=document.getElementById('dbProduct'); if(sel) DB.product=sel.value;
   const today=dbToday();
@@ -3610,6 +3631,95 @@ async function dbLoadMkt(){
     if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
     if(hint) hint.textContent='加载失败';
   }
+}
+/* ============ 板块数据（数据浏览「板块」页签）============
+   数据走 Worker 的 /v1/sector/overview（Tushare 东财板块口径，盘后更新）。
+   核心是**量能变化**：今日成交额相对近 5 日 / 20 日均值的增幅。
+   「评分 / 评价」两列先留空占位 —— 评分规则还没定。 */
+let _secState = { min: 10, type: '' };
+async function dbLoadSector(){
+  const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
+  if(hint) hint.textContent='取数中…';
+  if(box) box.innerHTML='<div class="empty">加载中…（要拉 21 个交易日的板块日线 + 资金流，首次约 10 秒）</div>';
+  try{
+    const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
+    const r=await fetch(base+'/v1/sector/overview?min='+encodeURIComponent(_secState.min),{cache:'no-store'});
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+    DB.last=j; sectorRender(j);
+    if(hint) hint.textContent='已加载 板块数据 · '+dbPretty(j.last)+' · '+j.total+' 个板块（已剔除成分股 < '+j.minStocks+' 的与统计篮子）';
+  }catch(e){
+    if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
+    if(hint) hint.textContent='加载失败';
+  }
+}
+function sectorRender(j){
+  const box=document.getElementById('dbBody'); if(!box) return;
+  const all=j.list||[];
+  const L=_secState.type?all.filter(function(x){return x.type===_secState.type;}):all;
+  const nEtf=L.filter(function(x){return !!x.etf;}).length;
+  const up=L.filter(function(x){return (x.pct||0)>0;}).length;
+  const pc=function(v){ return v==null?'—':((v>=0?'+':'')+(+v).toFixed(1)+'%'); };
+  const yi=function(v){ return v==null?'—':((v>=0?'+':'')+(+v).toFixed(2)); };
+  const cls=function(v){ return v==null?'':(v>=0?'db-up':'db-dn'); };
+
+  let h='<div class="db-cards">'
+    + dbCard('板块数', String(L.length), '候选 '+j.allTotal+' 个 · 已剔除统计篮子', 1)
+    + dbCard('上涨板块', String(up), '占比 '+(L.length?Math.round(up/L.length*100):0)+'%', up)
+    + dbCard('有适配 ETF', String(nEtf), '匹配率 '+(L.length?Math.round(nEtf/L.length*100):0)+'%', nEtf)
+    + dbCard('最新交易日', dbPretty(j.last), 'Tushare 盘后口径', 1)
+    + '</div>';
+
+  h+='<div class="panel"><h3>筛选</h3><div class="sec-filter">'
+    + '<label>成分股下限 <input id="secMin" type="number" min="2" max="300" value="'+_secState.min+'"></label>'
+    + '<span class="sec-seg">'
+    + ['','行业板块','概念板块','地域板块'].map(function(t){
+        return '<button data-st="'+ces(t)+'" class="'+(_secState.type===t?'on':'')+'">'+(t||'全部')+'</button>';
+      }).join('')
+    + '</span></div></div>';
+
+  h+='<div class="panel"><h3>板块量能榜（'+ces(String(j.last))+'）</h3>'
+    + '<p class="panel-sub">按<b>量能变化</b>降序 —— 今日成交额相对近 5 日均值的增幅。'
+    + '成交额与净流入单位均为亿元，资金流为<b>主力净额</b>（超大单+大单）。'
+    + '成分股数取当日涨跌家数之和。<b>「评分 / 评价」两列留空占位</b>，等规则。</p>'
+    + '<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'
+    + '<th class="lft">#</th><th class="lft">板块</th><th>涨跌幅</th><th>成交额</th>'
+    + '<th>量能·5日</th><th>量能·20日</th><th>今净流入</th><th>昨净流入</th><th>五日净流入</th>'
+    + '<th>成分股</th><th class="lft">适配 ETF</th><th>评分</th><th>评价</th>'
+    + '</tr></thead><tbody>'
+    + L.map(function(x,i){
+        return '<tr><td class="lft">'+(i+1)+'</td>'
+          + '<td class="lft">'+ces(x.name)+' <span style="opacity:.42;font-size:10px">'+ces(String(x.code).replace('.DC',''))+'</span></td>'
+          + '<td class="'+cls(x.pct)+'">'+pc(x.pct)+'</td>'
+          + '<td>'+(x.amount==null?'—':(+x.amount).toFixed(0))+' 亿</td>'
+          + '<td class="'+cls(x.volR5)+'">'+pc(x.volR5)+'</td>'
+          + '<td class="'+cls(x.volR20)+'">'+pc(x.volR20)+'</td>'
+          + '<td class="'+cls(x.net)+'">'+yi(x.net)+' 亿</td>'
+          + '<td class="'+cls(x.netPrev)+'">'+yi(x.netPrev)+' 亿</td>'
+          + '<td class="'+cls(x.net5)+'">'+yi(x.net5)+' 亿</td>'
+          + '<td>'+x.stocks+'</td>'
+          + '<td class="lft">'+(x.etf
+              ? '<span class="mkt-stk" data-code="'+ces(x.etf.code)+'" data-nm="'+ces(x.etf.name)+'" title="在个股盯盘打开">'+ces(x.etf.name)+'</span>'
+              : '<span style="opacity:.35">—</span>')+'</td>'
+          + '<td style="opacity:.3">—</td><td style="opacity:.3">—</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div></div>';
+
+  box.innerHTML=h;
+  /* 点 ETF → 个股盯盘 */
+  box.querySelectorAll('.mkt-stk').forEach(function(el){
+    el.onclick=function(){
+      const c=el.getAttribute('data-code'), n=el.getAttribute('data-nm');
+      const st=mkStock(n||c, c);
+      if(st) loadStock(st, n||st.code);
+    };
+  });
+  const mn=document.getElementById('secMin');
+  if(mn) mn.onchange=function(){ _secState.min=Math.max(2,Math.min(300,+mn.value||10)); dbLoadSector(); };
+  box.querySelectorAll('[data-st]').forEach(function(b){
+    b.onclick=function(){ _secState.type=b.getAttribute('data-st')||''; if(DB.last) sectorRender(DB.last); };
+  });
 }
 function mktRender(j){
   const box=document.getElementById('dbBody'); if(!box) return;
@@ -3967,15 +4077,15 @@ async function chanceScanAll(){
       if(DB.tab===t) return;
       DB.tab=t; DB.date=''; DB.last=null; DB.contract='';
       tabs.forEach(function(x){ x.classList.toggle('on', x===b); });
-      const isLhb=(t==='lhb'), isMkt=(t==='mkt');
-      const pw=document.getElementById('dbProductWrap'); if(pw) pw.style.display=(isLhb||isMkt)?'none':'';
+      const isLhb=(t==='lhb'), isMkt=(t==='mkt'), isSec=(t==='sector');
+      const pw=document.getElementById('dbProductWrap'); if(pw) pw.style.display=(isLhb||isMkt||isSec)?'none':'';
       const lv=document.getElementById('lhbView'); if(lv) lv.style.display=isLhb?'':'none';
-      const n1=document.getElementById('dbNoteCcpm'); if(n1) n1.style.display=(isLhb||isMkt)?'none':'';
+      const n1=document.getElementById('dbNoteCcpm'); if(n1) n1.style.display=(isLhb||isMkt||isSec)?'none':'';
       const n2=document.getElementById('dbNoteLhb'); if(n2) n2.style.display=isLhb?'':'none';
       const n3=document.getElementById('dbNoteMkt'); if(n3) n3.style.display=isMkt?'':'none';
-      /* 大盘数据是「整段时间的快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 收起日期导航 */
+      /* 大盘 / 板块都是「整段时间的快照」（近一年或近 21 日 + 最新交易日），没有逐日翻页的概念 → 收起日期导航 */
       ['dbPrev','dbDate','dbNext'].forEach(function(id){
-        const el=document.getElementById(id); if(el) el.style.display=isMkt?'none':'';
+        const el=document.getElementById(id); if(el) el.style.display=(isMkt||isSec)?'none':'';
       });
       const box=document.getElementById('dbBody'); if(box) box.innerHTML='<div class="empty">加载中…</div>';
       dbLoad(0);
