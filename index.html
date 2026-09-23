@@ -2591,15 +2591,7 @@ document.getElementById("blockBtn").onclick=()=>{var i=document.getElementById("
 document.getElementById("blockInput").addEventListener("keydown",e=>{if(e.key==="Enter"){addBlock(e.target.value);e.target.value="";}});
 document.getElementById("secBody").addEventListener("click",e=>{
   const s=e.target.closest(".secname[data-stk]"); if(!s) return;
-  const sym=splitSymbol(s.dataset.stk); if(!sym) return;
-  curStock=sym; curStock.name=s.dataset.snm; _zoom=null;
-  document.getElementById("stockName").textContent=curStock.name+" ("+sym.secid+")";
-  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
-  document.querySelector('.tab-btn[data-tab="stock"]').classList.add("active");
-  document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
-  document.getElementById("sec-stock").classList.add("active");
-  setMode('kline');
-  ensureECharts(()=>refreshStock());
+  openInStock(s.dataset.snm, s.dataset.stk);   /* 跳页签 + 画 K 线的公共入口，见 openInStock */
 });
 
 /* ===== 板块 → 成分股下钻 ===== */
@@ -2962,6 +2954,19 @@ function loadStock(sym, label){
   curStock=sym; curStock.name=label||sym.code; _zoom=null;
   document.getElementById("stockName").textContent=curStock.name+" ("+sym.secid+")";
   ensureECharts(()=>{ if(STOCK_MODE==='rt') refreshRt(); else refreshStock(); });
+}
+/* 从别的模块点标的名 → 跳到「个股盯盘」并画 K 线。
+   ⚠ 必须**切页签 + 切 section**：只调 loadStock 的话人还停在「数据浏览」，
+     盯盘面板是 display:none 的 —— 表现就是「点了没反应」（2026-09-23 用户报过）。
+   这套动作原先散在选股器里写了一遍，现在收成一个入口，各处复用。 */
+function openInStock(name, code){
+  const st=mkStock(name, code); if(!st) return;
+  document.querySelectorAll(".tab-btn").forEach(function(x){ x.classList.remove("active"); });
+  const b=document.querySelector('.tab-btn[data-tab="stock"]'); if(b) b.classList.add("active");
+  document.querySelectorAll(".section").forEach(function(x){ x.classList.remove("active"); });
+  const sec=document.getElementById("sec-stock"); if(sec) sec.classList.add("active");
+  setMode('kline');
+  loadStock(st, name||st.code);
 }
 /* ============ 自选股池 + 多股对比 ============ */
 const DEFAULT_STOCKS=[["上证指数","sh000001"],["创业板指","sz399006"],["科创50","sh000688"],
@@ -3487,6 +3492,15 @@ function lhbRender(j){
     + dbCard('游资净买入', YI(st.youzi.net+st.retail.net), (st.youzi.n+st.retail.n)+' 个活跃/散户席位', st.youzi.net+st.retail.net)
     + dbCard('北向净买入', YI(st.north.net), '沪深股通席位', st.north.net)
     + '</div>';
+  /* 席位明细还没出完时必须**明确说出来**：否则机构/游资那几张卡片看着像真数据，
+     其实只统计了已公布的一小部分 —— 用户会以为功能坏了（2026-09-23 报过）。 */
+  if(j.__partial){
+    h+='<div class="db-read" style="background:rgba(255,212,121,.10);border-color:rgba(255,212,121,.35)">'
+      + '<b>⚠ '+dbPretty(String(j.date))+' 的席位明细还没公布完</b>（'+j.seatStocks+' / '+j.n+' 只标的已有席位）—— '
+      + '逐席位数据（top_inst）比上榜名单晚几个小时更新，所以上面的「机构 / 游资 / 北向」合计、'
+      + '以及展开后的「买入前五 / 卖出前五」目前只覆盖已公布的部分。<b>稍后点「刷新」就会补齐</b>；'
+      + '也可以点左边的「上一日」先看完整榜单。</div>';
+  }
   if(DB.view==='seat'){
     /* 席位总览按**买入金额**降序（2026-09-23 按需求改）——
        这个视图要回答的是「谁买得最多」，买入额才是那个正序指标：
@@ -3574,7 +3588,15 @@ async function dbFetchOne(d){
   if(DB.tab==='lhb'){
     const r=await fetch(dbBase()+'/v1/lhb?date='+d+'&_='+Date.now(),{cache:'no-store'})
       .then(function(x){ return x.json(); }).catch(function(){ return null; });
-    return (r&&r.ok&&r.n)?r:null;
+    if(!r||!r.ok||!r.n) return null;
+    /* ⚠ 龙虎榜的两个接口更新不同步：`top_list`（名单 + 买卖合计）当天就有，
+       `top_inst`（逐席位明细）要晚几个小时才补齐。这中间只有 10% 上下的标的带席位 ——
+       展开区一片空白、机构/游资统计也是残的，看着就像「坏了」。
+       所以判定标准不能只看 n：**带席位的标的不到一半，就当作还没发布完**，
+       标上 __partial 交给 dbLoad 继续往前找（它本来就会逐日回退）。 */
+    r.seatStocks=(r.list||[]).filter(function(x){ return x.seats&&x.seats.length; }).length;
+    r.__partial=(r.seatStocks*2<r.n);
+    return r;
   }
   const r=await fetch(dbBase()+'/v1/cffex/ccpm?date='+d+'&product='+DB.product+'&_='+Date.now(),{cache:'no-store'})
     .then(function(x){ return x.json(); }).catch(function(){ return null; });
@@ -3598,13 +3620,16 @@ async function dbLoad(dir){
     if(!DB.date) dir=-1;                                   // 没有基准日：一律往前找
     if(dir>0&&d>today){ if(hint) hint.textContent='已是最新交易日（'+dbPretty(DB.date)+'）'; DB.busy=false; return; }
     const step=dir>0?1:-1;
-    let j=null, n=0;
+    let j=null, n=0, part=null;
     while(n<10){                                           // 最多试 10 天，跨周末/短假都够
       if(step>0&&d>today) break;                           // 不往未来翻
       const r=await dbFetchOne(d);
-      if(r){ j=r; break; }
+      /* 半成品（席位明细还没出完）先记下、继续往前找完整的那天 ——
+         但要是 10 天里只有半成品，就把最近那份摆出来（下面的提示条会说明）。 */
+      if(r){ if(!r.__partial){ j=r; break; } if(!part) part=r; }
       d=dbShift(d,step); n++;
     }
+    if(!j&&part) j=part;
     if(!j){
       if(step<0) box.innerHTML='<div class="empty">往前找了 10 天都没取到（可能还没发布，或不是交易日）</div>';
       if(hint) hint.textContent=step>0?'往后找了 10 天也没有数据':'取数失败';
@@ -3614,7 +3639,8 @@ async function dbLoad(dir){
     const el=document.getElementById('dbDate'); if(el) el.value=dbPretty(j.date);
     dbRender(j);
     if(hint) hint.textContent = (DB.tab==='lhb')
-      ? ('已加载 龙虎榜 · '+dbPretty(j.date)+' · '+j.n+' 只上榜（交易所盘后披露）')
+      ? ('已加载 龙虎榜 · '+dbPretty(j.date)+' · '+j.n+' 只上榜'
+         + (j.__partial ? ('（席位明细只到 '+j.seatStocks+'/'+j.n+' 只，还没公布完）') : '（交易所盘后披露）'))
       : ('已加载 '+j.product+' · '+dbPretty(j.date)+'（数据来自中金所）');
   }catch(e){ if(hint) hint.textContent='加载失败：'+((e&&e.message)||'网络不通'); }
   DB.busy=false;
@@ -3773,13 +3799,9 @@ function sectorRender(j){
     + '</tbody></table></div></div>';
 
   box.innerHTML=h;
-  /* 点 ETF → 个股盯盘 */
+  /* 点适配 ETF → 个股盯盘看 K 线 */
   box.querySelectorAll('.mkt-stk').forEach(function(el){
-    el.onclick=function(){
-      const c=el.getAttribute('data-code'), n=el.getAttribute('data-nm');
-      const st=mkStock(n||c, c);
-      if(st) loadStock(st, n||st.code);
-    };
+    el.onclick=function(){ openInStock(el.getAttribute('data-nm'), el.getAttribute('data-code')); };
   });
   const mn=document.getElementById('secMin');
   if(mn) mn.onchange=function(){ _secState.min=Math.max(2,Math.min(300,+mn.value||10)); dbLoadSector(); };
@@ -3900,7 +3922,7 @@ function mktRender(j){
       + '<table class="mkt-tb">'
       + '<thead><tr><th class="lft">#</th><th class="lft">标的</th><th>收盘</th><th>涨跌幅</th><th>成交额</th></tr></thead><tbody>'
       + top.map(function(x,i){
-          return '<tr><td>'+(i+1)+'</td>'
+          return '<tr><td class="lft">'+(i+1)+'</td>'   /* 表头 # 是左对齐，这格也必须 lft，否则序号飘到列右边 */
             +'<td class="lft"><span class="mkt-stk" data-code="'+ces(x.code)+'" data-nm="'+ces(x.name)+'" title="在个股盯盘打开">'+ces(x.name)+'</span> <span style="opacity:.5;font-size:11px">'+ces(x.code)+'</span></td>'
             +'<td>'+x.close+'</td>'
             +'<td class="'+(x.pct>=0?'db-up':'db-dn')+'">'+(x.pct>=0?'+':'')+(+x.pct).toFixed(2)+'%</td>'
@@ -3912,12 +3934,9 @@ function mktRender(j){
 
   box.innerHTML=h;
   drawMktCharts(t,hs,avg);
-  /* 点前 50 里的标的 → 跳到个股盯盘 */
+  /* 点前 50 / 北向十大里的标的 → 跳到个股盯盘看 K 线 */
   box.querySelectorAll('.mkt-stk').forEach(function(el){
-    el.onclick=function(){
-      const st=mkStock(el.getAttribute('data-nm')||el.getAttribute('data-code'), el.getAttribute('data-code'));
-      if(st) loadStock(st, el.getAttribute('data-nm')||st.code);
-    };
+    el.onclick=function(){ openInStock(el.getAttribute('data-nm'), el.getAttribute('data-code')); };
   });
 }
 function drawMktCharts(t,hs,avg){
