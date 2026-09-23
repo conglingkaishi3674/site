@@ -3497,7 +3497,7 @@ function lhbRender(j){
   if(j.__partial){
     h+='<div class="db-read" style="background:rgba(255,212,121,.10);border-color:rgba(255,212,121,.35)">'
       + '<b>⚠ '+dbPretty(String(j.date))+' 的席位明细还没公布完</b>（'+j.seatStocks+' / '+j.n+' 只标的已有席位）—— '
-      + '逐席位数据（top_inst）比上榜名单晚几个小时更新，所以上面的「机构 / 游资 / 北向」合计、'
+      + '逐席位数据（东财 / Tushare 两个源都还没补齐）比上榜名单晚几个小时，所以上面的「机构 / 游资 / 北向」合计、'
       + '以及展开后的「买入前五 / 卖出前五」目前只覆盖已公布的部分。<b>稍后点「刷新」就会补齐</b>；'
       + '也可以点左边的「上一日」先看完整榜单。</div>';
   }
@@ -3640,7 +3640,8 @@ async function dbLoad(dir){
     dbRender(j);
     if(hint) hint.textContent = (DB.tab==='lhb')
       ? ('已加载 龙虎榜 · '+dbPretty(j.date)+' · '+j.n+' 只上榜'
-         + (j.__partial ? ('（席位明细只到 '+j.seatStocks+'/'+j.n+' 只，还没公布完）') : '（交易所盘后披露）'))
+         + (j.__partial ? ('（席位明细只到 '+j.seatStocks+'/'+j.n+' 只，还没公布完）')
+                        : ('（数据源：'+(j.src==='em'?'东方财富':'Tushare')+'）')))
       : ('已加载 '+j.product+' · '+dbPretty(j.date)+'（数据来自中金所）');
   }catch(e){ if(hint) hint.textContent='加载失败：'+((e&&e.message)||'网络不通'); }
   DB.busy=false;
