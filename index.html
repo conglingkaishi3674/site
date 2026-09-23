@@ -3472,7 +3472,7 @@ function lhbSeatRows(list){
   list.forEach(function(s){
     (s.seats||[]).forEach(function(x){
       const o=m[x.seat]||(m[x.seat]={seat:x.seat,stocks:[],buy:0,sell:0,net:0});
-      o.stocks.push({name:s.name,net:x.net});
+      o.stocks.push({name:s.name,net:x.net,buy:x.buy||0,sell:x.sell||0});   /* 存买卖额：筹码块要按买入额排 */
       o.buy+=x.buy; o.sell+=x.sell; o.net+=x.net;
     });
   });
@@ -3508,13 +3508,18 @@ function lhbRender(j){
        注：只改这里。个股展开的买五/卖五仍按老规则（特殊席位优先 → 成交额降序），
        那是「看重点」的场景，跟这里的「排座次」不是一回事。 */
     const rows=lhbSeatRows(list).sort(function(a,b){ return (+b.buy||0)-(+a.buy||0); });
-    h+='<div class="db-sub">当日席位总览 —— 同一席位在多只标的上的买卖已合并，<b>按买入金额从多到少</b>；每行列出它当天动过的每只标的（红=净买入，绿=净卖出）。共 '+rows.length+' 个席位</div>'
+    h+='<div class="db-sub">当日席位总览 —— 同一席位在多只标的上的买卖已合并，<b>席位、席位里的标的都按买入金额从多到少</b>；每行列出它当天动过的每只标的（红=净买入，绿=净卖出）。共 '+rows.length+' 个席位</div>'
       + rows.map(function(o){
           return '<div class="lhb-item open"><div class="lhb-seat-hd">'
             +'<div class="nm">'+lhbTag(o)+'<b>'+ces(o.t)+'</b><span class="cd">'+ces(o.seat)+'</span></div>'
             +'<div class="r">买 '+YI(o.buy)+'</div><div class="r">卖 '+YI(o.sell)+'</div><div class="r">净 '+YIC(o.net)+'</div>'
             +'</div><div class="lhb-seats"><div class="lhb-chips">'
-            + o.stocks.slice().sort(function(a,b){ return Math.abs(b.net)-Math.abs(a.net); }).map(function(x){
+            /* 席位内的标的也按**买入额**降序（2026-09-23 按需求改）：跟席位本身同一套口径 ——
+               这个视图回答的是「这个席位买得最多的是哪几只」。买入额打平再比净额绝对值，保证顺序稳定。
+               （牌子上的数字仍显示净额：红=净买入、绿=净卖出，那是方向，跟排序键是两回事。） */
+            + o.stocks.slice().sort(function(a,b){
+                return ((+b.buy||0)-(+a.buy||0)) || (Math.abs(b.net)-Math.abs(a.net));
+              }).map(function(x){
                 return '<span class="lhb-chip">'+ces(x.name)+' <span class="'+FCLS(x.net)+'">'+(x.net>0?'+':'')+YI(x.net)+'</span></span>';
               }).join('')
             +'</div></div></div>';
