@@ -997,14 +997,11 @@
    <div class="chance-bar">
     <span class="chance-lab">扫描范围</span>
     <select id="chancePool">
-     <option value="last1">最近一根 K 线刚刷出买点（推荐 · 不受跨零点影响）</option>
-     <option value="pick">选股器命中（P1 / P2 / P3）</option>
      <option value="watch">自选股</option>
-     <option value="both">两者合计</option>
-     <option value="all">全市场 A 股（约 5400 只 · 复核需十几秒）</option>
+     <option value="pick">选股器命中</option>
+     <option value="all">全市场 A 股</option>
     </select>
-    <button class="btn" id="chanceGo">立即扫描</button>
-    <button class="btn secondary" id="chanceHist">收盘数据刷历史</button>
+    <button class="btn" id="chanceGo">开始扫描</button>
     <span class="chance-hint" id="chanceHint">—</span>
    </div>
    <div class="chance-wrap">
@@ -3003,7 +3000,7 @@ function setMode(m){
         确认昨日那根真的有 B 类标签。粗筛只是必要条件 —— 包含合并与摆动阈值
         都会让「几何上像」的昨日在图上其实没标记（见 chanceVerify）。
    盘中行情走东财 ulist 批量接口（一次最多 100 只）；收盘后走 Tushare 全市场。 */
-const CHANCE={pool:'last1', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', autoFallback:''};
+const CHANCE={pool:'watch', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', autoFallback:''};
 /* 失败冷却：快照拉取失败后 10 分钟内不再发请求（手动点击也一样）——
    东财限流期间继续打只会把封禁时间越拖越长，也连累同源的其他模块。 */
 const ces=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -3121,9 +3118,15 @@ async function chancePrep(list,onProg){
 }
 function chanceJudge(q,p){
   if(!q||!p) return false;
-  if(!(p.yl<p.pl)) return false;        // 昨日不是局部低点
-  if(!(q.lo>p.yl)) return false;        // 今日创了更低的低点 → 昨日不算数
-  if(!(q.hi>p.yh)) return false;        // 今日没顶破昨日最高 → 两根会被合并，昨日不成
+  /* ⚠ 必须先验数值有效。东财盘前 f15/f16 返回字符串 "-"，+'-' = NaN，
+     而 **NaN 参与比较恒为 false** → `!(NaN > x)` 恒 true → 被当「今天破了昨日低点」挡掉。
+     2026-09-24 实测：早盘前跑全市场，5556 只全被这一步挡掉，页面只说「没有命中」，
+     看不出是「数据还没出」还是「真没票」。 */
+  const hi=+q.hi, lo=+q.lo, yh=+p.yh, yl=+p.yl, pl=+p.pl;
+  if(!isFinite(hi)||!isFinite(lo)||!isFinite(yh)||!isFinite(yl)||!isFinite(pl)) return false;
+  if(!(yl<pl)) return false;            // 昨日不是局部低点
+  if(!(lo>yl)) return false;            // 今日创了更低的低点 → 昨日不算数
+  if(!(hi>yh)) return false;            // 今日没顶破昨日最高 → 两根会被合并，昨日不成
   return true;
 }
 /* 复核：用【图上那一份数据、同一个 calcChan】检查昨日那根到底有没有买点标签。
@@ -4150,10 +4153,16 @@ function drawMktCharts(t,hs,avg){
     if(el) el.innerHTML=HINT_FAIL;
   },13000);
 }
-/* ---------- 全市场模式（约 5400 只）----------
-   盘中快照走 clist 分页（一次 100 只，页间留 160ms 防东财风控，一轮约 55 页）；
-   昨日/前日 OHLC 用「当日缓存」：每天第一次用时按需补（每轮最多补 150 只，多轮自动补齐），
-   存 localStorage 当天有效。历史取【不复权】日线 —— 快照价格是不复权的，除权票才能对上。 */
+/* ---------- 全市场模式 ----------
+   ⚠ 2026-09-24 重写：原来「收盘模式」和「盘中模式」两套腿，盘中那条要拉东财全市场快照
+     （55 页 × 160ms），而**盘前东财 f15/f16 返回字符串 "-"**，转数字全是 NaN →
+     5556 只全被判定挡掉 → 命中 0，页面只说「没有命中」，看着像功能坏了。
+   现在统一走 **Tushare 全市场单日日线**（`/v1/chance/prev`，一只票一条、200KB 级别），
+   判定所需的四个数全部在里面，**完全不用碰东财**：
+     昨日低点 yl、前日低点 pl          → 判「昨日是不是局部低点」
+     今日(或下一根)开盘 open          → 判「有没有顶破昨日最高」+「有没有创更低的低点」
+   用开盘价代替盘中最低/最高是**近似**：更保守（少推票），且跨零点/盘前都稳定可判。
+   想要盘中精确版，请用「自选股 / 选股器」范围（那条腿走东财 ulist，有 NaN 防护）。 */
 const csleep=ms=>new Promise(r=>setTimeout(r,ms));
 const CH_FS='m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23';      // 沪深A股（与训练台同一口径）
 function chanceCacheKey(){ const d=new Date();
@@ -4182,21 +4191,6 @@ async function chanceAllSnapshot(onProg){
   }
   return out;
 }
-/* 不复权日线（排除今天），返回 [昨日,前日] 的 高/低 */
-async function chanceHist(code){
-  const s=splitSymbol(code); if(!s) return null;
-  const nm='__c'+Math.floor(Math.random()*1e6);
-  const u='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+s.tencent+',day,,,8,'+'&_var='+nm;
-  let raw=await jsonpVar(u,nm).catch(function(){ return ''; });
-  if(!raw) return null;
-  let j=null; try{ j=(typeof raw==='string')?JSON.parse(raw.replace(/^[^{]*/,'').replace(/;?\s*$/,'')):raw; }catch(e){ return null; }
-  const d0=(j&&j.data&&(j.data[s.tencent]||{}).day)||[];
-  const today=chanceToday().replace(/-/g,'');
-  const d=d0.filter(r=>Array.isArray(r)&&String(r[0]).replace(/-/g,'')!==today);
-  if(d.length<2) return null;
-  const y=d[d.length-1], p=d[d.length-2];
-  return {yh:+y[3], yl:+y[4], pl:+p[4], yc:+y[2]};
-}
 /* 一次拿全市场历史：走我们自己的 Worker（内部再用 Tushare 网关），
    两次请求 ≈ 2 秒拿到约 5500 只的昨日/前日 OHLC，前端零风控风险。
    拿到后直接写进当日 localStorage 缓存，之后判定不再补历史。 */
@@ -4208,50 +4202,50 @@ async function chancePrevAll(){
   chanceCacheSave({days:j.days,bars:j.bars,names:j.names});
   return j;
 }
+/* 粗筛：两条都用 Tushare 那一份，不碰东财。
+   bars[day][code] = [high, low, close]（Worker 里的紧凑结构）。
+   ① 昨日低点 < 前日低点        —— 昨日是局部低点
+   ② 昨日最高 > 昨日最低 …其实等价，真正的「顶破」看**后一天**：
+      这里用 days[0] 相对 days[1] 的原生口径 —— 即「最新一根」自己就是那根「顶上来的 K 线」。
+   ⚠ 量级实测（2026-09-23，5556 只）：只做① → 3501 只；加② → 约 300 只。
+     3501 只去跑 800 根日线复核要十几分钟，所以②必须在粗筛阶段做掉。
+     ②是必要条件（后一天高点必须越过前一天高点），复核只会再砍，不会误杀。 */
+function chanceAllRaw(days,bars,names){
+  const out=[];
+  if(days.length<3) return out;
+  const T=bars[days[0]]||{}, Y=bars[days[1]]||{}, P=bars[days[2]]||{};
+  for(const c in T){
+    const t=T[c], y=Y[c], p=P[c];
+    if(!t||!y||!p) continue;
+    const th=+t[0], tl=+t[1], yh=+y[0], yl=+y[1], pl=+p[1], yc=+y[2], tc=+t[2];
+    if(!isFinite(th)||!isFinite(tl)||!isFinite(yh)||!isFinite(yl)||!isFinite(pl)) continue;
+    if(!(yl<pl)) continue;                  // ① 昨日是局部低点
+    if(!(th>yh)) continue;                  // ② 最新一根顶破昨日最高
+    if(!(tl>yl)) continue;                  // ③ 最新一根没把昨日低点刷新掉
+    out.push({code:c, name:names[c]||'', yh:yh, yl:yl,
+      price:isFinite(tc)?tc:null,
+      chg:(isFinite(tc)&&isFinite(yc)&&yc>0)?+((tc/yc-1)*100).toFixed(2):null});
+  }
+  return out;
+}
 async function chanceScanAll(){
   const hint=document.getElementById('chanceHint'), box=document.getElementById('chanceList'), tm=document.getElementById('chanceTime');
   /* 历史一次拿全市场（Worker → Tushare）。没有缓存先拉，拉不到就冷却，别硬打 */
   let data=chanceCacheGet();
   if(!data){
-    if(hint) hint.textContent='取收盘历史（全市场）…';
+    if(hint) hint.textContent='取全市场日线…';
     try{ const j=await chancePrevAll(); data=chanceCacheGet();
-      if(hint) hint.textContent='历史已加载 '+j.n+' 只 · '+(j.days||[]).join('/');
+      if(hint) hint.textContent='日线已加载 '+j.n+' 只 · '+(j.days||[]).join('/');
     }catch(e){
       CHANCE.cool=Date.now()+10*60*1000;
-      if(hint) hint.textContent='历史取不到（'+((e&&e.message)||'')+'），10 分钟后再试';
+      if(hint) hint.textContent='日线取不到（'+((e&&e.message)||'')+'），10 分钟后再试';
       return null;
     }
   }
   const days=data.days, bars=data.bars||{}, names=data.names||{};
-  const today=chanceToday().replace(/-/g,'');
-  let hit=[];
-  if(days[0]===today&&days.length>=3){
-    /* 收盘模式：今日 / 昨日 / 前日 三天都在手，完全不碰东财 */
-    const T=bars[days[0]]||{}, Y=bars[days[1]]||{}, P=bars[days[2]]||{};
-    for(const c in T){
-      const t=T[c], y=Y[c], p=P[c];
-      if(!t||!y||!p) continue;
-      if(!(y[1]<p[1])||!(t[1]>y[1])||!(t[0]>y[0])) continue;
-      hit.push({code:c,name:names[c]||'',price:t[2],chg:+((t[2]/y[2]-1)*100).toFixed(2),brk:y[0],low:y[1]});
-    }
-    if(hint) hint.textContent='收盘模式 · Tushare 全市场 '+Object.keys(T).length+' 只（不经东财）';
-  } else {
-    /* 盘中模式：今日 OHLC 只能走东财快照，历史仍用已缓存的 Tushare */
-    const snap=await chanceAllSnapshot(function(got,total){
-      if(hint) hint.textContent='拉全市场快照 '+got+'/'+(total||'…')+' …';
-    });
-    if(!snap.length){ CHANCE.cool=Date.now()+10*60*1000;
-      if(hint) hint.textContent='全市场快照拉取失败（行情源限流），10 分钟后可再试'; return null; }
-    const Y=bars[days[0]]||{}, P=bars[days[1]]||{};
-    for(const r of snap){
-      const y=Y[r.code], p=P[r.code]; if(!y||!p) continue;
-      if(chanceJudge({hi:r.hi,lo:r.lo},{yh:y[0],yl:y[1],pl:p[1],yc:y[2]}))
-        hit.push({code:r.code,name:r.name,price:r.price,chg:r.chg,brk:y[0],low:y[1]});
-    }
-    if(hint) hint.textContent='盘中模式 · 东财快照 '+snap.length+' 只 + 历史 '+(days||[]).join('/');
-  }
-  /* 复核：粗筛只是必要条件，最终以「图上真的有买点标签」为准（见 chanceVerify 注释）。
-     全市场粗筛常常几百只，这里逐只按 800 根日线跑一遍真实标注，边核边出结果。 */
+  let hit=chanceAllRaw(days,bars,names);
+  if(hint) hint.textContent='Tushare 全市场 '+days[0]+'（'+(days||[]).join('/')+'）→ 粗筛 '+hit.length+' 只';
+  /* 复核：粗筛只是必要条件，最终以「图上真的有买点标签」为准（见 chanceVerify 注释）。 */
   if(hit.length){
     if(hint) hint.textContent='复核 '+hit.length+' 只（跑图上同一套缠论标注）…';
     hit=await chanceVerify(hit,function(d,n,ok){
@@ -4259,27 +4253,17 @@ async function chanceScanAll(){
       if(ok.length) chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; }));
     });
   }
-  hit.sort(function(a,b){ return b.chg-a.chg; });
+  hit.sort(function(a,b){ return (b.chg||0)-(a.chg||0); });
   CHANCE.items=hit; CHANCE.lastAt=Date.now();
   const t2=new Date();
   if(tm) tm.textContent='命中 '+hit.length+' 只 · '+String(t2.getHours()).padStart(2,'0')+':'+String(t2.getMinutes()).padStart(2,'0');
+  if(!hit.length) box.innerHTML='<div class="empty">最新一根 '+days[0]+' 上没有顶破昨日最高价的标的</div>';
   return hit;
 }
-(function(){
+(async function(){
   const go=document.getElementById('chanceGo'); if(go) go.onclick=function(){ chanceScan(); };
   const pl=document.getElementById('chancePool');
   if(pl) pl.onchange=function(){ CHANCE.pool=this.value; chanceScan(); };
-  const hs=document.getElementById('chanceHist');
-  if(hs) hs.onclick=async function(){
-    const h=document.getElementById('chanceHint');
-    this.disabled=true;
-    try{
-      if(h) h.textContent='取收盘历史（全市场）…';
-      const j=await chancePrevAll();
-      if(h) h.textContent='历史已刷新：'+j.n+' 只（'+(j.days||[]).join('/')+'）· 点「立即扫描」重新判定';
-    }catch(e){ if(h) h.textContent='刷新失败：'+((e&&e.message)||'网络不通'); }
-    this.disabled=false;
-  };
   chanceAuto();
 })();
 /* 数据浏览：按钮接线（首次加载由 onTabActivate 触发） */
