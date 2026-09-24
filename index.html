@@ -3003,7 +3003,7 @@ function setMode(m){
         确认昨日那根真的有 B 类标签。粗筛只是必要条件 —— 包含合并与摆动阈值
         都会让「几何上像」的昨日在图上其实没标记（见 chanceVerify）。
    盘中行情走东财 ulist 批量接口（一次最多 100 只）；收盘后走 Tushare 全市场。 */
-const CHANCE={pool:'last1', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:''};
+const CHANCE={pool:'last1', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', autoFallback:''};
 /* 失败冷却：快照拉取失败后 10 分钟内不再发请求（手动点击也一样）——
    东财限流期间继续打只会把封禁时间越拖越长，也连累同源的其他模块。 */
 const ces=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -3014,6 +3014,45 @@ function chanceCodes(){
   const seen={}, out=[];
   for(const x of arr){ const c=x&&x.code; if(!c||seen[c]) continue; seen[c]=1; out.push({code:String(c),name:x.name||''}); }
   return out;
+}
+/* 兜底：从服务端 /v1/pick 直接取本轮命中的标的。
+   ⚠ 实测（2026-09-24）：**Worker 里根本没有 /v1/pick 这个路由**（列全部路由确认），
+     线上直接打它返回 404 {"error":"not found"}。前端 `if(PICK_API)` 这段是「服务端就绪后自动接管」
+     的预留分支，目前 PICK_API 为空 → 走的是**离线快照** window.PICK_SNAPSHOT 那条路。
+     所以这里的兜底同样取快照，别指望服务端。 */
+async function chancePickItems(){
+  const out=[];
+  const snap=(typeof window!=='undefined')?window.PICK_SNAPSHOT:null;
+  if(snap){
+    Object.keys(snap).forEach(function(sid){
+      const it=(snap[sid]||{}).items||[];
+      it.forEach(function(x){ if(x&&x.code) out.push({code:String(x.code),name:x.name||''}); });
+    });
+  }
+  return out;
+}
+/* 取扫描范围。顺序：① 页面已有结果（选股器铺过就是它）；② 兜底自取（快照）；
+   ③ 仍然为空 → 退到**用户自选股**，别让页面停在一句「范围为空」上。
+   ⚠ 为什么不直接兜到「全市场」：全市场要 ~5400 只 × 800 根日线，跑不动。
+     原因是这个模块的设计前提就是「范围 = 选股器命中」，全市场另有 all 模式（走 Tushare 聚合）。 */
+async function chancePoolList(hint){
+  let list=chanceCodes();
+  if(list.length) return list;
+  if(hint) hint.textContent='本地还没有选股结果，正在读取内置快照…';
+  try{
+    const got=await chancePickItems();
+    const seen={}; list=[];
+    for(const x of got){ if(seen[x.code]) continue; seen[x.code]=1; list.push(x); }
+  }catch(e){}
+  if(list.length){ CHANCE.autoFallback='snap'; return list; }
+  /* 快照也没有（极早期部署）→ 用自选股，至少让扫描有东西可扫。
+     ⚠ MY 声明在后面的 script 块里，这里跨块引用；`typeof` 防护不能省，
+       否则「TDZ（let 声明前引用）」会直接抛错把整个扫描打掉，而不是走进这条兜底。 */
+  const my=[]; const seen2={};
+  const src=(typeof MY!=='undefined'&&MY)?MY:[];
+  src.forEach(function(x){ const c=x&&x.code; if(c&&!seen2[c]){ seen2[c]=1; my.push({code:String(c),name:x.name||''}); } });
+  if(my.length){ CHANCE.autoFallback='watch'; if(hint) hint.textContent='内置快照里没有结果，改用自选股 '+my.length+' 只…'; return my; }
+  return list;
 }
 /* 批量当日行情：一次最多 100 只，取当日 高/低/开/昨收/现价/涨幅 */
 async function chanceQuotes(codes){
@@ -3269,8 +3308,8 @@ async function chanceScan(){
        先取选股器命中票的历史日线，按最新一根共同日期定义「昨日」，
        再看今天（或下一交易日）有没有顶破它。 */
     if(CHANCE.pool==='last1'){
-      const list=chanceCodes();
-      if(!list.length){ box.innerHTML='<div class="empty">选股器还没有结果 —— 先去选股器加载一次</div>';
+      const list=await chancePoolList(hint);
+      if(!list.length){ box.innerHTML='<div class="empty">这个范围里还没有标的 —— 换个范围，或先去选股器加载一次结果</div>';
         if(hint) hint.textContent='范围为空'; CHANCE.busy=false; return; }
       if(hint) hint.textContent='取历史日线 '+list.length+' 只…';
       const hist={};
@@ -3323,7 +3362,7 @@ async function chanceScan(){
       if(hint) hint.textContent='最新一根 '+day+'（'+day.slice(4,6)+'/'+day.slice(6,8)+'）· 共 '+list.length+' 只 → 粗筛 '+raw.length+' → 图上确认 '+hit.length;
       CHANCE.busy=false; return;
     }
-    const list=chanceCodes();
+    const list=await chancePoolList(hint);
     if(!list.length){
       box.innerHTML='<div class="empty">这个范围里还没有标的 —— 换个范围，或先去选股器加载一次结果</div>';
       if(hint) hint.textContent='范围为空';
