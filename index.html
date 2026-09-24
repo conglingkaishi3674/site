@@ -997,6 +997,7 @@
    <div class="chance-bar">
     <span class="chance-lab">扫描范围</span>
     <select id="chancePool">
+     <option value="last1">最近一根 K 线刚刷出买点（推荐 · 不受跨零点影响）</option>
      <option value="pick">选股器命中（P1 / P2 / P3）</option>
      <option value="watch">自选股</option>
      <option value="both">两者合计</option>
@@ -3002,13 +3003,13 @@ function setMode(m){
         确认昨日那根真的有 B 类标签。粗筛只是必要条件 —— 包含合并与摆动阈值
         都会让「几何上像」的昨日在图上其实没标记（见 chanceVerify）。
    盘中行情走东财 ulist 批量接口（一次最多 100 只）；收盘后走 Tushare 全市场。 */
-const CHANCE={pool:'pick', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0};
+const CHANCE={pool:'last1', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:''};
 /* 失败冷却：快照拉取失败后 10 分钟内不再发请求（手动点击也一样）——
    东财限流期间继续打只会把封禁时间越拖越长，也连累同源的其他模块。 */
 const ces=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function chanceCodes(){
   const useM=(CHANCE.pool==='watch'||CHANCE.pool==='both');
-  const useP=(CHANCE.pool==='pick'||CHANCE.pool==='both');
+  const useP=(CHANCE.pool==='pick'||CHANCE.pool==='both'||CHANCE.pool==='last1');
   const arr=(useM?(MY||[]):[]).concat(useP?((typeof pickItemsAll!=='undefined'&&pickItemsAll)||[]):[]);
   const seen={}, out=[];
   for(const x of arr){ const c=x&&x.code; if(!c||seen[c]) continue; seen[c]=1; out.push({code:String(c),name:x.name||''}); }
@@ -3047,20 +3048,32 @@ async function chanceQuotes(codes){
      盘前/收盘后跑时最后一根直接就是昨日，按固定下标取会错位一天。 */
 function chanceToday(){ const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* 目标昨日：极简模式下由「最新一根已出的日线」决定，其余情况就是日历昨天。
+   ⚠ chancePrep / chanceVerifyOne / chanceScan 三处必须共用同一个值，否则
+     「判定用的昨日」和「复核用的昨日」会差一天，复核必然全灭。 */
+let CH_YDAY='';
+function chanceYesterday(){
+  return (CHANCE.pool==='last1'&&CHANCE.lastDay) ? CHANCE.lastDay : chanceToday();
+}
 async function chancePrep(list,onProg){
-  const need=list.filter(x=>!CHANCE.prev[x.code]);
+  const yday=(chanceYesterday()||'').replace(/-/g,'');
+  /* 缓存带了日期：目标日一变（跨零点 / 切到极简模式）就整批作废重取，
+     否则会拿昨天算出来的「y=09-23」当今日的「昨日」用 —— 跨零点刷不出来的根因。 */
+  const need=list.filter(x=>!CHANCE.prev[x.code] || CHANCE.prev[x.code].d!==yday);
   if(!need.length) return;
   let done=0;
-  const today=chanceToday();
+  const today=chanceToday().replace(/-/g,'');
   for(let i=0;i<need.length;i+=6){
     await Promise.all(need.slice(i,i+6).map(async x=>{
       try{
         const s=splitSymbol(x.code);
         if(s){
           const r=await txKline(s.tencent,'day',8);
-          const d=((r&&r.data)||[]).filter(k=>String(k.t).replace(/-/g,'')!==today.replace(/-/g,''));
-          if(d.length>=2){ const y=d[d.length-1], p=d[d.length-2];
-            CHANCE.prev[x.code]={yh:+y.h, yl:+y.l, pl:+p.l, yc:+y.c}; }
+          /* Y = 目标日那一根（必须在，且不能被今天的 K 线顶掉）；P = 它前一根 */
+          const d=((r&&r.data)||[]).filter(k=>String(k.t).replace(/-/g,'')!==today);
+          const yi=d.findIndex(k=>String(k.t).replace(/-/g,'')===yday);
+          if(yi>=1){ const y=d[yi], p=d[yi-1];
+            CHANCE.prev[x.code]={d:yday, yh:+y.h, yl:+y.l, pl:+p.l, yc:+y.c}; }
         }
       }catch(e){}
       done++; if(onProg) onProg(done,need.length);
@@ -3089,8 +3102,16 @@ async function chanceVerifyOne(code){
   try{ const r=await txKline(s.tencent,'day',800); bars=(r&&r.data)||[]; }catch(e){ return false; }
   if(bars.length<20) return false;
   const today=chanceToday().replace(/-/g,'');
-  if(String(bars[bars.length-1].t).replace(/-/g,'')!==today) return false;   // 今日还没行情 → 无从判断
-  const yi=bars.length-2;                                                    // 昨日 = 倒数第二根
+  const lastT=String(bars[bars.length-1].t).replace(/-/g,'');
+  /* 目标日那根在序列里的下标：① 极简模式按缓存里的日期精确定位；
+     ② 其余情况取「最后一根非今天」的 —— 容错：数据源把今天这根也发出来了。 */
+  let yi=-1;
+  if(CHANCE.pool==='last1'&&CHANCE.lastDay){
+    yi=bars.findIndex(k=>String(k.t).replace(/-/g,'')===CHANCE.lastDay.replace(/-/g,''));
+  }else{
+    yi = lastT!==today ? bars.length-1 : bars.length-2;
+  }
+  if(yi<1) return false;
   let ch=null; try{ ch=calcChan(bars,null); }catch(e){ return false; }
   for(const p of ((ch&&ch.points)||[])){ if(p.i===yi && String(p.type).charAt(0)==='B') return true; }
   return false;
@@ -3242,6 +3263,64 @@ async function chanceScan(){
     if(CHANCE.pool==='all'){
       const hit=await chanceScanAll();
       if(hit) chanceRender(hit);
+      CHANCE.busy=false; return;
+    }
+    /* —— 极简「最近一根」模式：数据源层面自洽，跨零点也不依赖本地日历 ——
+       先取选股器命中票的历史日线，按最新一根共同日期定义「昨日」，
+       再看今天（或下一交易日）有没有顶破它。 */
+    if(CHANCE.pool==='last1'){
+      const list=chanceCodes();
+      if(!list.length){ box.innerHTML='<div class="empty">选股器还没有结果 —— 先去选股器加载一次</div>';
+        if(hint) hint.textContent='范围为空'; CHANCE.busy=false; return; }
+      if(hint) hint.textContent='取历史日线 '+list.length+' 只…';
+      const hist={};
+      for(let i=0;i<list.length;i+=6){
+        await Promise.all(list.slice(i,i+6).map(async x=>{
+          try{ const s=splitSymbol(x.code); if(!s) return;
+            const r=await txKline(s.tencent,'day',8);
+            hist[x.code]=((r&&r.data)||[]).map(function(k){
+              return {t:String(k.t).replace(/-/g,''),o:+k.o,h:+k.h,l:+k.l,c:+k.c}; });
+          }catch(e){}
+        }));
+        if(hint) hint.textContent='取历史日线 '+Math.min(i+6,list.length)+'/'+list.length+' …';
+      }
+      let day='';                                   /* 最新一根的共同日期 = 「昨日」 */
+      for(const c in hist){ const d=hist[c]; if(d&&d.length){ const t=d[d.length-1].t; if(t>day) day=t; } }
+      CHANCE.lastDay=day;
+      CHANCE.prev={};                               /* 换日 → 清掉旧缓存 */
+      if(!day){ box.innerHTML='<div class="empty">历史日线取不到 —— 稍后重试</div>';
+        if(hint) hint.textContent='历史为空'; CHANCE.busy=false; return; }
+      /* 粗筛：8 根里够判两根相邻，先筛出「昨日是局部低点」的；顶破要等当天行情 */
+      const approx=[];
+      for(const x of list){
+        const d=hist[x.code]; if(!d||d.length<2) continue;
+        const y=d[d.length-1]; if(y.t!==day) continue;          /* 还没出这根 → 跳过 */
+        const p=d[d.length-2]; CHANCE.prev[x.code]={d:day,yh:y.h,yl:y.l,pl:p.l,yc:y.c};
+        if(isFinite(p.l)&&isFinite(y.l)&&y.l<p.l) approx.push(x);
+      }
+      /* 当天行情：15:00 后最新一根就是当日；否则这仍是「昨日」的候选，走最后一轮判定 */
+      if(hint) hint.textContent='取当天行情（判断有没有顶破）…';
+      const qs=await chanceQuotes(approx.map(x=>x.code));
+      const raw=[];
+      for(const x of approx){
+        const q=qs[x.code], p=CHANCE.prev[x.code];
+        if(q&&isFinite(q.hi)&&isFinite(p.yh)&&q.hi>p.yh && isFinite(q.lo)&&q.lo>p.yl)
+          raw.push({code:x.code,name:q.name||x.name,price:q.price,chg:q.chg,brk:p.yh,low:p.yl});
+      }
+      const t=new Date(), hhmm=String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+      if(!raw.length){ box.innerHTML='<div class="empty">'+day.slice(4,6)+'/'+day.slice(6,8)+' 那天没有顶上来的标的 —— 下一轮自动再扫</div>';
+        if(hint) hint.textContent='最新一根 '+day+' · 粗筛 0 只 · '+hhmm; CHANCE.busy=false; return; }
+      if(hint) hint.textContent='复核 '+raw.length+' 只（跑图上同一套缠论标注）…';
+      const hit=await chanceVerify(raw,function(d,n,ok){
+        if(hint) hint.textContent='复核 '+d+'/'+n+'（图上确认 '+ok.length+' 只）…';
+        if(ok.length) chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; }));
+      });
+      hit.sort(function(a,b){ return b.chg-a.chg; });
+      CHANCE.items=hit; CHANCE.lastAt=Date.now();
+      if(!hit.length) box.innerHTML='<div class="empty">粗筛 '+raw.length+' 只，图上复核无一有标签 —— 下一轮自动再扫</div>';
+      else chanceRender(hit);
+      if(tm) tm.textContent='命中 '+hit.length+' 只 · '+hhmm;
+      if(hint) hint.textContent='最新一根 '+day+'（'+day.slice(4,6)+'/'+day.slice(6,8)+'）· 共 '+list.length+' 只 → 粗筛 '+raw.length+' → 图上确认 '+hit.length;
       CHANCE.busy=false; return;
     }
     const list=chanceCodes();
