@@ -699,6 +699,160 @@
    z-index:130;opacity:0;pointer-events:none;transition:opacity .25s;max-width:80vw}
  .kt-toast.show{opacity:1}
  @media (max-width:1100px){ .kt-play{flex-direction:column} .kt-side{width:100%;max-height:none} }
+
+/* =========================================================================
+   手机适配（第一档）—— 2026-09-24
+   -------------------------------------------------------------------------
+   目标：手机上「能看、不错位、不横向溢出」。纯 CSS 覆盖，**不动任何 JS**，
+   现有桌面/平板布局零影响（全部规则都关在 max-width:768px 里）。
+
+   实测到的三个根因（390px 视口，改前）：
+     ① .rail（右侧聊天/评论栏）在 ≤900px 段漏了隐藏规则 —— 它仍是
+        position:fixed + 320px 宽，直接盖在内容上；
+     ② .sidebar 在 ≤900px 变成横向排列后 .sb-nav 没有换行，
+        7 个模块按钮横排撑到 1034px，整页横向溢出 899px；
+     ③ 一批「桌面密度」结构在窄屏放不下：宽表格 min-width:660/1040px、
+        多列网格（8 列排行榜、7 列龙虎榜、选股器 4 列卡片…）。
+
+   处理原则：
+     · 能收窄的收窄（网格降列、固定宽度改自适应）；
+     · 收不动的（宽表格）**允许它在自己容器里横向滚动**，而不是撑破整页 ——
+       这是关键：overflow-x:auto 加在**容器**上，页面本身不横滚；
+     · 最后用 overflow-x:hidden 兜底，任何漏网元素都不至于把整页顶歪。
+   ========================================================================= */
+@media (max-width:768px){
+
+  /* --- A. 整页不许横向溢出（兜底）--- */
+  html,body{overflow-x:hidden;max-width:100%}
+
+  /* --- B. 隐藏右侧聊天 / 评论栏 ---
+     ≤1200px 只是隐藏了这一档没覆盖到 ≤900px，补上。
+     它是 fixed 定位、脱离文档流，所以直接 display:none 不会影响主区宽度。 */
+  .rail{display:none !important}
+
+  /* --- C. 主容器留白收紧 ---
+     原 .app{padding:26px 338px 40px 214px} 是给左右固定栏预留的。
+     左栏(196)+右栏(320)在手机上都不占位了，这里改成普通内边距。 */
+  .app{padding:12px 12px 28px !important;max-width:100%}
+
+  /* --- D. 左侧模块栏：从「横排一长条」改成「可换行的按钮墙」---
+     原来 flex-direction:row + 每个按钮 flex:1 1 0 → 7 个挤一行必然溢出。
+     改成 wrap + 每个按钮最小宽度，让它自动折成 2~3 行。 */
+  .sidebar{flex-direction:column;gap:8px;width:100% !important;
+    position:static !important;height:auto !important;
+    padding:10px !important;border-radius:16px}
+  .sidebar .sb-nav{flex-direction:row;flex-wrap:wrap;gap:6px;width:100%}
+  .sidebar .sb-item{flex:1 1 46%;min-width:0;min-height:44px;padding:9px 10px;gap:7px}
+  /* 窄屏只留图标 + 主标题，「副标题」那行挤不下就算了 */
+  .sidebar .sb-item .sb-txt i{display:none}
+  .sidebar .sb-item .sb-txt b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sidebar .sb-item .sb-ico{flex:0 0 18px;font-size:15px}
+  /* 侧栏收起按钮：手机上没意义（不是固定侧栏了），藏掉 */
+  .sidebar .sb-bottom{display:none}
+  .sidebar .sb-top{width:100%}
+  .sidebar .sb-refresh{justify-content:center}
+
+  /* --- E. 顶栏状态条 / 模块头：允许换行，别硬撑 --- */
+  .statusbar{gap:8px 14px;padding:8px 10px;font-size:11.5px}
+  .module-header{flex-direction:column;align-items:flex-start;gap:8px}
+  .module-title h2{font-size:19px}
+  .module-title p{font-size:12px}
+  .timestamp{text-align:left;min-width:0;font-size:11px}
+
+  /* --- F. 通用卡片 / 面板留白收紧 --- */
+  .panel{padding:12px;border-radius:16px}
+  .panel h3{font-size:15px}
+  .card .value{font-size:20px}
+
+  /* --- G. 网格降列：能用一列就别用两列 --- */
+  .two-col{grid-template-columns:1fr}
+  .mkt-cols{grid-template-columns:1fr}
+  .grid-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .pick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kt-ops{grid-template-columns:1fr 1fr}
+  .kt-ovgrid{grid-template-columns:1fr}
+
+  /* --- H. 选股器：左侧固定 340px 的列表改成占满宽度、高度收窄 --- */
+  .pick-body{flex-direction:column;height:auto}
+  .pick-list-panel{flex:0 0 auto;width:100%;height:280px}
+  #pickChart{min-height:320px}
+
+  /* --- I. 宽表格：容器内横滚，别撑破整页 ---
+     这是本档最重要的约定 —— .db-tbl / .sec-wrap table 的 min-width 保持不动
+     （列多，压窄了没法读），但**父容器**必须 overflow-x:auto 且宽度受控。
+    ⚠ 只加在容器上；给表格本身设 overflow 无效（表格不是块级滚动容器）。 */
+  .db-scroll{-webkit-overflow-scrolling:touch;max-width:100%}
+  .db-tbl{font-size:12px}
+  .db-card b{font-size:15px}
+  .db-toolbar{gap:6px}
+  .db-toolbar input{width:92px}
+  .db-hint{margin-left:0;width:100%}
+
+  .sec-wrap{-webkit-overflow-scrolling:touch;max-width:100%}
+  .sec-filter{gap:8px 12px;font-size:11.5px}
+  .sec-seg button{padding:5px 9px;font-size:11.5px}
+
+  /* --- J. 龙虎榜：7 列网格在手机上压到失真，收成 4 列 ---
+     表头原序：标的 | 收盘 | 涨跌幅 | 榜单净买入 | 买入合计 | 卖出合计 | 席位
+     窄屏保留「标的 + 涨跌幅 + 榜单净买入 + 席位」——**净买入是龙虎榜的核心信息**，
+     收盘价和买/卖合计（可推导）让位。隐藏第 2（收盘）/5（买入合计）/6（卖出合计）列。
+     ⚠ 之前误藏了第 4 列（净买入），等于把主信息藏了，已改正。 */
+  .lhb-hd,.lhb-head{grid-template-columns:1.6fr .7fr 1fr .5fr;gap:5px;font-size:11.5px}
+  .lhb-hd>div:nth-child(2),.lhb-hd>div:nth-child(5),.lhb-hd>div:nth-child(6),
+  .lhb-head>div:nth-child(2),.lhb-head>div:nth-child(5),.lhb-head>div:nth-child(6){display:none}
+  .lhb-seats{padding:8px 8px 10px}
+  .lhb-seats td.sn{max-width:150px}
+
+  /* --- K. 今日机会：5 列 → 3 列 ---
+     表头原序：代码/名称 | 现价 | 涨幅 | 顶破价 | 昨日低点
+     窄屏保留「名称 + 顶破价 + 昨日低点」——**后两个是这个策略的判定依据**
+     （顶破价有没有被突破），现价/涨幅是可另查的实时值。隐藏第 2、3 列。
+     ⚠ 之前误藏了第 4/5 列（判定依据），已改正。 */
+  .chance-head,.chance-row{grid-template-columns:1.4fr 1fr 1fr;gap:6px;font-size:12px}
+  .chance-head>span:nth-child(2),.chance-head>span:nth-child(3),
+  .chance-row>span:nth-child(2),.chance-row>span:nth-child(3){display:none}
+  .chance-list{max-height:min(60vh,420px)}
+  .ck-chart{height:300px}
+  .chance-bar{gap:8px}
+
+  /* --- L. 训练排行榜：8 列 → 5 列（去「总收益率」「场次」「平均」）---
+     窄屏优先保「总收益额 + 最佳 + 单局最大亏损」这三项：金额比百分比直观，
+     且这三项正是用户关心的口径。隐藏第 4（总收益率）/7（场次）/8（平均）列。 */
+  .kt-rank-head,.kt-rank-row{grid-template-columns:26px 1fr 74px 58px 58px;gap:5px;font-size:11.5px}
+  .kt-rank-head>span:nth-child(4),.kt-rank-row>span:nth-child(4),
+  .kt-rank-head>span:nth-child(7),.kt-rank-row>span:nth-child(7),
+  .kt-rank-head>span:nth-child(8),.kt-rank-row>span:nth-child(8){display:none}
+  .kt-rank{max-height:min(52vh,380px)}
+
+  /* --- M. 模拟盘：侧栏已由 1100px 那条降为整宽，这里再压高度与字号 --- */
+  #ktChart{height:340px}
+  .kt-big{font-size:34px}
+  .kt-chart-head{flex-wrap:wrap;gap:6px;font-size:12.5px}
+  .kt-day{margin-left:0;width:100%}
+  .kt-card{padding:16px;border-radius:14px}
+  .kt-log{max-height:120px}
+
+  /* --- N. 匹配对战：比分表压到 3 列 --- */
+  .pvp-head,.pvp-row{grid-template-columns:56px 1fr 1fr;gap:5px;font-size:11.5px}
+  .pvp-ops{grid-template-columns:1fr}
+
+  /* --- O. 图表容器高度：手机上按视口高走，别用桌面的死高度 --- */
+  .mkt-chart{min-height:260px}
+  .chance-wrap,.db-read,.db-note{font-size:11.5px}
+
+  /* --- P. 浮层 / 弹窗：占满可用宽度 --- */
+  .kt-overlay{padding:10px}
+  .kt-card{width:100%;max-width:100%;max-height:94vh}
+
+  /* --- Q. 触摸目标：按钮/输入框给到 44px 附近的点击高度 --- */
+  .btn{padding:10px 14px}
+  .db-tabs button{padding:7px 12px}
+  .rail-input input,.rail-send{height:auto}
+
+  /* --- R. 表格字号统一收一档（窄屏挤） --- */
+  table{font-size:12px}
+  .db-tbl th,.db-tbl td{padding:5px 5px}
+}
 </style>
 </head>
 <body>
