@@ -620,20 +620,24 @@
  /* 排位开局按钮：金色系，与模拟的蓝色区分 */
  .kt-rank-go{background:linear-gradient(90deg,#6f5514,#4a3a0e);border:1px solid #b98c2a;color:#ffe9b0}
  .kt-rank-go:hover{border-color:#e0b45a}
- /* 排行榜：名次 / 昵称 / 最佳 / 场次 / 平均，五列网格 */
- /* 排行榜标题栏：口径切换 + 最右侧的刷新按钮 */
+ /* 排行榜：名次 / 昵称 / 总收益额 / 总收益率 / 最佳 / 单局最大亏损 / 场次 / 平均 —— 八列网格。
+    表头可点排序（th.srt），箭头 ⇅ 未排 / ▼ 降 / ▲ 升。 */
+ /* 排行榜标题栏：最右侧的刷新按钮 */
  .kt-rank-bar{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
- .kt-rank-tabs{display:inline-flex;gap:5px;margin-left:8px;vertical-align:middle}
  .kt-rank-refresh{margin-left:auto;background:var(--bg-soft);border:1px solid var(--line);color:var(--muted);
    border-radius:8px;padding:3px 10px;cursor:pointer;font:inherit;font-size:11px;white-space:nowrap}
  .kt-rank-refresh:hover{color:#fff;border-color:var(--blue);background:rgba(95,168,255,.14)}
- .kt-rank-tabs button{background:var(--bg-soft);border:1px solid var(--line);color:var(--muted);
-   border-radius:8px;padding:3px 9px;cursor:pointer;font:inherit;font-size:11px}
- .kt-rank-tabs button.on{color:#fff;border-color:var(--blue);background:rgba(95,168,255,.18)}
  .kt-rank{max-height:min(46vh,420px);overflow:auto;font-size:12px}
- .kt-rank-head,.kt-rank-row{display:grid;grid-template-columns:40px 1fr 100px 76px 70px 46px 60px;gap:6px;
+ .kt-rank-head,.kt-rank-row{display:grid;grid-template-columns:36px 1fr 92px 72px 66px 78px 44px 58px;gap:6px;
    align-items:center;padding:6px 2px}
  .kt-rank-head{color:var(--muted);font-size:11px;border-bottom:1px solid var(--line)}
+ .kt-rank-head.srt{cursor:pointer;user-select:none;white-space:nowrap}
+ .kt-rank-head.srt:hover{color:var(--text)}
+ .kt-rank-head.srt .ar{font-size:9px;margin-left:2px;opacity:.45}
+ .kt-rank-head.srt.on{color:#ffd479}
+ .kt-rank-head.srt.on .ar{opacity:.95}
+ .kt-rank-head .lft,.kt-rank-row .lft{text-align:left}
+ .kt-rank-head .rgt,.kt-rank-row .rgt{text-align:right}
  .kt-rank-row{border-bottom:1px solid rgba(255,255,255,.06)}
  .kt-rank-row .rk{color:var(--muted);font-variant-numeric:tabular-nums}
  .kt-rank-row.top .rk{color:#ffd54a}
@@ -1116,7 +1120,7 @@
       <button class="btn kt-mode kt-rank-go" id="ktGoRank">🏆 排位 · 随机个股</button>
       <div class="kt-hint" id="ktRankHint">规则与模拟完全一致 —— 区别只有一个：结算后成绩自动记进右边的排行榜。</div>
       <div class="kt-rules">
-       <b>排位规则</b> 只有<b>随机个股</b>一种（自定义代码与 ETF 不计入排位）；同样是随机起点、90 个交易日、两段推进。榜上按<b>总收益 / 最佳收益 / 平均收益 / 场次</b>排序 —— 总收益是各局收益<b>复利累乘</b>（每局都是 100 万全仓起步，滚着算才等于真实资金曲线），只显示昵称（就是聊天区那个名字，点右栏名字可改）。
+       <b>排位规则</b> 只有<b>随机个股</b>一种（自定义代码与 ETF 不计入排位）；同样是随机起点、90 个交易日、两段推进。榜上默认按<b>总收益</b>排序，<b>点表头可正反排序</b>（昵称 / 总收益 / 最佳 / 单局最大亏损 / 场次 / 平均）—— 总收益是各局收益<b>复利累乘</b>（每局都是 100 万全仓起步，滚着算才等于真实资金曲线），只显示昵称（就是聊天区那个名字，点右栏名字可改）。
       </div>
       <!-- 重置排位战绩：只清自己（服务端也只删自己 uid 的行）；模拟局的历史不受影响 -->
       <div class="kt-reset">
@@ -1129,9 +1133,6 @@
      </div>
      <div class="kt-lobby-right">
       <div class="kt-lobby-title kt-rank-bar">训练排行榜 <span class="kt-sub" id="ktRankTotal"></span>
-       <span class="kt-rank-tabs" id="ktRankTabs">
-        <button class="on" data-m="total">总收益</button><button data-m="best">最佳收益</button><button data-m="avg">平均收益</button><button data-m="games">场次</button>
-       </span>
        <button class="kt-rank-refresh" id="ktRankRefresh" title="刷新排行榜与我的战绩">⟳ 刷新</button>
       </div>
       <div class="kt-rank" id="ktRankList">加载中…</div>
@@ -7041,9 +7042,20 @@ setInterval(()=>{
     const mt=function(tag,m){
       return (m&&m.g)?('<b>'+tag+'</b> '+m.w+'-'+(m.g-m.w)+'（'+Math.round(m.w/m.g*100)+'%）'):'';
     };
+    /* 单局极值：单次最大收益 / 单次最大亏损。后端没有数据时给 null，
+       这里一个都不拼 —— 不显示比显示一个假的 0.00% 诚实。 */
+    const exf=function(r){
+      if(r.roundBest==null&&r.roundWorst==null) return '';
+      const a=[];
+      if(r.roundBest!=null)  a.push('单局最好 <b class="'+cls(r.roundBest)+'">'+sgn(r.roundBest)+'%</b>');
+      if(r.roundWorst!=null) a.push('单局最差 <b class="'+cls(r.roundWorst)+'">'+sgn(r.roundWorst)+'%</b>');
+      return a.join(' · ');
+    };
     const subf=function(r){
       const a=[mt('BO1',r.m1),mt('BO3',r.m3),mt('BO5',r.m5)].filter(Boolean);
-      return '共 <b>'+r.games+'</b> 场'+(a.length?(' · '+a.join(' · ')):'');
+      const ex=exf(r);
+      return '共 <b>'+r.games+'</b> 场'+(a.length?(' · '+a.join(' · ')):'')
+        +(ex?(' · '+ex):'');
     };
     try{
       const j=await pvpCall('rank',null,'?uid='+encodeURIComponent(myUid()));
@@ -7121,6 +7133,39 @@ setInterval(()=>{
   $('ktGoRank').onclick=function(){ startGame('rank'); };
   /* ---------- 排行榜 ---------- */
   let rankMode='total', myRebirths=0;
+  /* 表头可点排序：sk=排序键，sd=-1 降序 / +1 升序。
+     默认按「总收益」降序 —— 这也是榜单的服务端默认口径，两边保持一致。 */
+  let _rkSort={sk:'total', sd:-1};
+  /* 列定义集中在这里 —— **表头、排序、单元格共用同一份列序**，散着写必漏列。
+     k=排序键（null=不可排序）；hl=高亮键（同一排序键出现在多列时，只让真正代表它的那一列亮）；
+     t=表头文字；lft=左对齐；cell(r)=单元格 HTML。 */
+  const RK_COLS=[
+    {k:null,    t:'名次',       lft:true,  cell:r=>'<span class="rk">'+(r.rank<=3?'🏆 ':'')+r.rank+'</span>', cls:'rk'},
+    {k:'nick',  t:'昵称',       lft:true,  cell:r=>'<span class="nm">'+escT(r.nick)+rebTxt(r.rebirths)+'</span>', cls:'nm'},
+    {k:'total', t:'总收益额',   cell:r=>'<span class="mo">'+(r.total==null?'—':yuan(Math.round(r.total*10000)))+'</span>', cls:'mo'},
+    {k:'total', t:'总收益率',   hl:true,   cell:r=>'<span class="bs '+(r.total==null?'':cls(r.total))+'">'+(r.total==null?'—':(sgn(r.total)+'%'))+'</span>', cls:'bs'},
+    {k:'best',  t:'最佳',       cell:r=>'<span class="av '+cls(r.best)+'">'+((r.best==null)?'—':(sgn(r.best)+'%'))+'</span>', cls:'av'},
+    /* 单局最大亏损：各局收益里最小的那个，**不强行夹到 0** ——
+       万一某人从没亏过（全正），这里就显示他最低的那一局（哪怕是 +1%），
+       口径统一成「最差的一局」，比凭空造一个 0% 诚实。 */
+    {k:'worst', t:'单局最大亏损', cell:r=>'<span class="av '+cls(r.worst)+'">'+((r.worst==null)?'—':(sgn(r.worst)+'%'))+'</span>', cls:'av'},
+    {k:'games', t:'场次',       cell:r=>'<span class="g">'+r.games+' 场</span>', cls:'g'},
+    {k:'avg',   t:'平均',       cell:r=>'<span class="av '+cls(r.avg)+'">'+((r.avg==null)?'—':(sgn(r.avg)+'%'))+'</span>', cls:'av'}
+  ];
+  /* 名称列按拼音、数字列比大小，**空值一律沉底**（不管正序倒序）——
+     跟板块表 secSortRows 同一套规则，免得两个表排序手感不一样。 */
+  function rkSortRows(list){
+    const k=_rkSort.sk, d=_rkSort.sd;
+    return list.slice().sort(function(a,b){
+      if(k==='nick') return String(a.nick||'').localeCompare(String(b.nick||''),'zh')*d;
+      const va=a[k], vb=b[k];
+      const na=(va==null||va===''||isNaN(va)), nb=(vb==null||vb===''||isNaN(vb));
+      if(na&&nb) return 0;
+      if(na) return 1;
+      if(nb) return -1;
+      return (+va-+vb)*d;
+    });
+  }
   function setRebirth(n){
     myRebirths=Math.max(0,+n||0);
     const el=$('ktRebirth'); if(el) el.textContent=myRebirths?('已重生 '+myRebirths+' 次'):'';
@@ -7132,17 +7177,33 @@ setInterval(()=>{
     if(!top.length){
       box.innerHTML='<div class="kt-empty">还没有人上榜 —— 打一局排位，当第一个。</div>';
     }else{
-      box.innerHTML='<div class="kt-rank-head"><span>名次</span><span>昵称</span><span>总收益额</span><span>总收益率</span><span>最佳</span><span>场次</span><span>平均</span></div>'
-        +top.map(function(r){
+      const S=rkSortRows(top);
+      box.innerHTML='<div class="kt-rank-head">'
+        +RK_COLS.map(function(c){
+            const al=c.lft?'lft':'rgt';
+            if(!c.k) return '<span class="'+al+'">'+c.t+'</span>';
+            /* 高亮只认 hl 那一列：总收益额与总收益率共用 k='total'，
+               若不区分，点一下两列一起亮，看着像排了两列。 */
+            const on=(_rkSort.sk===c.k)&&(c.hl||!(RK_COLS.some(function(o){return o.k===c.k&&o.hl;})));
+            return '<span class="'+al+' srt'+(on?' on':'')+'" data-sk="'+c.k+'" title="点击排序">'
+              + c.t+'<span class="ar">'+(on?(_rkSort.sd<0?'▼':'▲'):'⇅')+'</span></span>';
+          }).join('')
+        +'</div>'
+        +S.map(function(r){
           return '<div class="kt-rank-row'+(r.rank<=3?' top':'')+'">'
-            +'<span class="rk">'+(r.rank<=3?'🏆 ':'')+r.rank+'</span>'
-            +'<span class="nm">'+escT(r.nick)+rebTxt(r.rebirths)+'</span>'
-            +'<span class="mo">'+(r.total==null?'—':yuan(Math.round(r.total*10000)))+'</span>'
-            +'<span class="bs '+(r.total==null?'':cls(r.total))+'">'+(r.total==null?'—':(sgn(r.total)+'%'))+'</span>'
-            +'<span class="av '+cls(r.best)+'">'+sgn(r.best)+'%</span>'
-            +'<span class="g">'+r.games+' 场</span>'
-            +'<span class="av '+cls(r.avg)+'">'+sgn(r.avg)+'%</span></div>';
+            +RK_COLS.map(function(c){ return c.cell(r); }).join('')
+            +'</div>';
         }).join('');
+      /* 表头点击：同一列再点反向；换列时数字默认降序、昵称默认升序。
+         只重渲染、不重新取数 —— 数据没变，排序是纯前端的事。 */
+      box.querySelectorAll('.kt-rank-head .srt').forEach(function(th){
+        th.onclick=function(){
+          const k=th.getAttribute('data-sk');
+          if(_rkSort.sk===k) _rkSort.sd=-_rkSort.sd;
+          else { _rkSort.sk=k; _rkSort.sd=(k==='nick')?1:-1; }
+          renderRank(DB_RANK.last||j);
+        };
+      });
     }
     const tot=$('ktRankTotal'); if(tot) tot.textContent='（共 '+j.total+' 人）';
     if(j.me&&j.me.rebirths!=null) setRebirth(j.me.rebirths);
@@ -7152,28 +7213,24 @@ setInterval(()=>{
         +'总收益额 <b>'+(j.me.total==null?'—':yuan(Math.round(j.me.total*10000)))+'</b>'
         +'（总收益率 <b class="'+(j.me.total==null?'':cls(j.me.total))+'">'
         +(j.me.total==null?'—':(sgn(j.me.total)+'%'))+'</b>）'
-        +'　最佳 '+sgn(j.me.best)+'%　'+j.me.games+' 场　平均 '+sgn(j.me.avg)+'%'
+        +'　最佳 '+((j.me.best==null)?'—':(sgn(j.me.best)+'%'))
+        +'　单局最大亏损 '+((j.me.worst==null)?'—':(sgn(j.me.worst)+'%'))
+        +'　'+j.me.games+' 场　平均 '+((j.me.avg==null)?'—':(sgn(j.me.avg)+'%'))
         +rebTxt(j.me.rebirths))
       : '还没有上榜 —— 打一局排位就有了';
   }
+  /* 最近一次拉回来的榜单原样存着 —— 点表头排序时直接重渲染这份，不再打接口 */
+  const DB_RANK={last:null};
   function loadRank(){
     const box=$('ktRankList'); if(!box) return;
     if(typeof fetch!=='function') return;              // 沙箱/极老环境直接跳过
     fetch(RANK_API+'/v1/rank?mode='+rankMode+'&uid='+encodeURIComponent(myUid()),{cache:'no-store'})
       .then(function(r){ return r.json(); })
-      .then(function(j){ if(j&&j.ok) renderRank(j); })
+      .then(function(j){ if(j&&j.ok){ DB_RANK.last=j; renderRank(j); } })
       .catch(function(){ box.innerHTML='<div class="kt-empty">排行榜暂时连不上，稍后再看</div>'; });
   }
-  /* 口径切换 */
-  const rtabs=$('ktRankTabs');
-  if(rtabs){
-    const bs=rtabs.querySelectorAll('button');
-    for(let i=0;i<bs.length;i++) bs[i].onclick=function(){
-      rankMode=this.getAttribute('data-m');
-      for(let j=0;j<bs.length;j++) bs[j].classList.toggle('on',bs[j]===this);
-      loadRank();
-    };
-  }
+  /* 排序口径固定为「总收益」—— 原来的 总收益/最佳收益/平均收益/场次 四个切换按钮已按需求撤掉，
+     改为点表头正反排序（见 renderRank 里 th.srt 的接线）。 */
   /* 重置战绩：只清自己 —— 服务端也只删自己 uid 的行（接口里没有任何全表删除路径）。
      重生次数由服务端计数，清零不会把它抹掉。 */
   let resetArm=0;
