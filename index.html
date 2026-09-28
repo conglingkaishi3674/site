@@ -211,6 +211,10 @@
  .chance-row .cc{color:var(--muted);font-size:11px}
  .chance-list{max-height:min(52vh,460px);overflow:auto}
  .chance-note{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.75}
+ /* 模块标题下的「口径说明」行：必须能换行。
+    ⚠ 不要复用 .kt-ma —— 那个类带 white-space:nowrap + ellipsis，长句会被截成一行还打省略号。 */
+ .chance-cap{display:block;margin-top:5px;font-size:11.5px;color:var(--muted);line-height:1.8;white-space:normal}
+ .chance-cap b{color:var(--text)}
  .chance-note b{color:var(--text)}
  /* 今日机会：点行就地展开 K 线（再点收起）。
     展开时把列表的 max-height 放开 → 让整页滚动，否则 440px 的图被 460px 的容器夹住看不全 */
@@ -1147,7 +1151,11 @@
    <div class="module-header">
     <div class="module-title">
      <h2>今日机会 · 昨日买点刷新</h2>
-     <p>找出「昨日形成低点、今日盘中顶破昨日最高价」的标的 —— 这正是日线图上昨日那根 K 线刷出买点标记的那一刻。盘中每 5 分钟自动扫一轮。</p>
+     <p>找出「昨日形成低点、今日盘中顶破昨日最高价」的标的 —— 这正是日线图上昨日那根 K 线刷出买点标记的那一刻。盘中每 5 分钟自动扫一轮。
+      <span class="chance-cap">「昨日」= <b>上一个交易日</b>（不是日历上的昨天）：休市日不发 K 线，所以周末、中秋 / 国庆长假都会自动跳过，取的是最近一根已收盘的日线。</span>
+      <span class="chance-cap">三种范围判的是同一件事（<b>今日 顶破 昨日</b>），区别只在扫描对象和取数方式：<b>自选股 / 选股器</b>逐只现取行情；<b>全市场</b>用「批量日线表出昨日 / 前日 + 实时报价出今日」的组合，一次覆盖 5500+ 只，盘中同样可用。</span>
+      <span class="chance-cap">数据来源：昨日 / 前日来自 Tushare 的盘后日线表（一次拿全市场）；今日的高低价来自实时报价。两条腿都<b>不依赖东财</b>（东财是全站最容易被限流的一环），所以盘中每轮刷新不会把数据源打挂。</span>
+     </p>
     </div>
     <div class="timestamp" id="chanceTime">—</div>
    </div>
@@ -3155,7 +3163,7 @@ function setMode(m){
         确认昨日那根真的有 B 类标签。粗筛只是必要条件 —— 包含合并与摆动阈值
         都会让「几何上像」的昨日在图上其实没标记（见 chanceVerify）。
    盘中行情走东财 ulist 批量接口（一次最多 100 只）；收盘后走 Tushare 全市场。 */
-const CHANCE={pool:'watch', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', autoFallback:''};
+const CHANCE={pool:'watch', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', calDay:'', autoFallback:''};
 /* 失败冷却：快照拉取失败后 10 分钟内不再发请求（手动点击也一样）——
    东财限流期间继续打只会把封禁时间越拖越长，也连累同源的其他模块。 */
 const ces=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -3234,37 +3242,44 @@ async function chanceQuotes(codes){
   }
   return out;
 }
-/* 预算昨日 / 前日的 OHLC：每只只取最近 6 根日线，同一天只做一次。
-   ⚠ 必须按日期排除「今天」再取倒数两根 —— 盘中跑时最后一根是今天，
-     盘前/收盘后跑时最后一根直接就是昨日，按固定下标取会错位一天。 */
+/* 预算昨日 / 前日的 OHLC：每只只取最近 8 根日线，同一个日历日内只做一次。
+
+   ◎「昨日」= 该股【最后一根非今天】的日线 —— 从**数据里取**，不看本地日历。
+     为什么必须这样：周六周日、中秋（2026-09-25）、国庆这些休市日，数据源本来
+     就不会发 K 线，所以「最后一根非今天」天然就是上一个交易日，不需要维护交易日历。
+     反例（旧写法的 bug，2026-09-28 实测）：拿「日历昨天」甚至「日历今天」去
+     findIndex 匹配日期 —— 今天是 09-28、上一个是 09-24，日历上根本没有 09-27 这根，
+     匹配必然落空，缓存永远是空的 → chanceJudge 拿到 p=undefined 恒 return false
+     → 不管行情怎样都是「0 只命中」。
+
+   ⚠ chanceVerifyOne 的复核用的是同一条规则（按位置取「最后一根非今天」），
+     两边必须一致 —— 否则「判定用的昨日」与「复核用的昨日」差一天，复核必全灭。 */
 function chanceToday(){ const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-/* 目标昨日：极简模式下由「最新一根已出的日线」决定，其余情况就是日历昨天。
-   ⚠ chancePrep / chanceVerifyOne / chanceScan 三处必须共用同一个值，否则
-     「判定用的昨日」和「复核用的昨日」会差一天，复核必然全灭。 */
-let CH_YDAY='';
-function chanceYesterday(){
-  return (CHANCE.pool==='last1'&&CHANCE.lastDay) ? CHANCE.lastDay : chanceToday();
-}
 async function chancePrep(list,onProg){
-  const yday=(chanceYesterday()||'').replace(/-/g,'');
-  /* 缓存带了日期：目标日一变（跨零点 / 切到极简模式）就整批作废重取，
-     否则会拿昨天算出来的「y=09-23」当今日的「昨日」用 —— 跨零点刷不出来的根因。 */
-  const need=list.filter(x=>!CHANCE.prev[x.code] || CHANCE.prev[x.code].d!==yday);
+  const today=chanceToday().replace(/-/g,'');
+  /* 跨日整批作废：日线一天只更新一次，「最后一根非今天」在同一个日历日内不会变
+     （盘中那根今天的 K 线不管有没有发出来，都会被下面剔掉，所以不影响结果）。 */
+  if(CHANCE.calDay!==today){ CHANCE.prev={}; CHANCE.calDay=today; }
+  const need=list.filter(x=>!CHANCE.prev[x.code]);
   if(!need.length) return;
   let done=0;
-  const today=chanceToday().replace(/-/g,'');
   for(let i=0;i<need.length;i+=6){
     await Promise.all(need.slice(i,i+6).map(async x=>{
       try{
         const s=splitSymbol(x.code);
         if(s){
           const r=await txKline(s.tencent,'day',8);
-          /* Y = 目标日那一根（必须在，且不能被今天的 K 线顶掉）；P = 它前一根 */
+          /* 先剔掉今天那根（盘中/收盘后数据源会把今天带上），剩下的最后一根才是「昨日」。
+             只要 2 根够用：y = 昨日、p = 它的前一根（判「昨日是不是局部低点」用）。 */
           const d=((r&&r.data)||[]).filter(k=>String(k.t).replace(/-/g,'')!==today);
-          const yi=d.findIndex(k=>String(k.t).replace(/-/g,'')===yday);
-          if(yi>=1){ const y=d[yi], p=d[yi-1];
-            CHANCE.prev[x.code]={d:yday, yh:+y.h, yl:+y.l, pl:+p.l, yc:+y.c}; }
+          if(d.length>=2){
+            const y=d[d.length-1], p=d[d.length-2];
+            const yh=+y.h, yl=+y.l, pl=+p.l;
+            /* 数值有效性先验一遍（盘前某些源会给 "-"，+'-' = NaN，会一路污染判定） */
+            if(isFinite(yh)&&isFinite(yl)&&isFinite(pl))
+              CHANCE.prev[x.code]={d:String(y.t).replace(/-/g,''), yh:yh, yl:yl, pl:pl, yc:+y.c};
+          }
         }
       }catch(e){}
       done++; if(onProg) onProg(done,need.length);
@@ -3284,6 +3299,39 @@ function chanceJudge(q,p){
   if(!(hi>yh)) return false;            // 今日没顶破昨日最高 → 两根会被合并，昨日不成
   return true;
 }
+/* 服务端 K 线取数（兜底通道）。用途：直连腾讯失败时还能把日线取回来。
+   服务端 /v1/kl 只做「取数 + 边缘缓存」，不落库、不改数据，返回的就是腾讯那份前复权日线
+   —— 前端照旧跑自己的 calcChan，所以**正确性零风险**。
+   返回 {code: bars}（code 用 6 位原始代码，与服务端之间用 tencent 前缀互相映射）。
+
+   ⚠ 现在它是**兜底**而不是主路：实测（2026-09-28，20 只）服务端冷启动 4792ms、
+     命中缓存 470ms，而直连腾讯 8 并发只要 511ms —— 服务端回源单只 ~1.9s，
+     是直连（~0.25s）的 7 倍多。盘中 TTL 90 秒、扫描 5 分钟一轮，多数时候是冷的，
+     所以「服务端优先」会净变慢。它的价值是**可用性**（腾讯直连被挡时的第二条路）；
+     等访问量上来需要保护上游时，把它翻成主路即可。 */
+const KL_BATCH=20;      // 与服务端单次上限一致（服务端要留 subrequest 额度）
+async function klFetchBatch(codes){
+  /* ⚠ 基准地址必须在函数**体内**取，不能在模块级取：
+     CH_API 是同 <script> 块后面的 const，模块级执行时它还在 TDZ 里 ——
+     而且**同块内 `typeof CH_API` 也会抛**（跨块才不抛；这是踩过的坑）。
+     放到这里，调用时它早已初始化。 */
+  const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
+  const out={};
+  for(let i=0;i<codes.length;i+=KL_BATCH){
+    const chunk=codes.slice(i,i+KL_BATCH);
+    const tens=[], back={};
+    for(const c of chunk){ const s=splitSymbol(c); if(s){ tens.push(s.tencent); back[s.tencent]=c; } }
+    if(!tens.length) continue;
+    const r=await fetch(base+'/v1/kl?codes='+tens.join(',')+'&n=800',{cache:'no-store'});
+    const j=await r.json();
+    if(!j||!j.ok||!j.kl) throw new Error((j&&j.error)||'取数失败');
+    for(const ten in j.kl){
+      const c=back[ten], b=j.kl[ten];
+      if(c && Array.isArray(b) && b.length) out[c]=b;
+    }
+  }
+  return out;
+}
 /* 复核：用【图上那一份数据、同一个 calcChan】检查昨日那根到底有没有买点标签。
    为什么非核不可 —— 粗筛的三条几何条件只是必要条件，跟图上标注差两件事：
      ① 包含合并：图上的分型是在【合并后】的 K 线上判的。若昨日与前一根被合并，
@@ -3292,27 +3340,43 @@ function chanceJudge(q,p){
      ② 摆动阈值 ZPCT（ATR 自适应 3%~12%）：昨日是分型，但反向摆动不够就不进转折序列，
         图上同样不会标。
    实测（2026-09-21 收盘复核 7 只命中票）：只有 1 只图上真有标签，其余 6 只是假命中。
-   根数必须取 800 —— 与日线图一致；根数不同 → 分型/转折序列不同 → 标签对不上。 */
-async function chanceVerifyOne(code){
+   根数必须取 800 —— 与日线图一致；根数不同 → 分型/转折序列不同 → 标签对不上。
+   ⚠ preBars：外部已经取好的日线，传了就直接用。
+   ⚠ 取数顺序：**直连腾讯优先**，失败才走服务端 /v1/kl 兜一次。
+     为什么不是服务端优先 —— 2026-09-28 实测（20 只）：
+       服务端冷启动 4792ms / 命中缓存 470ms；直连腾讯（8 并发）只要 511ms。
+     服务端回源单只 ~1.9s，是直连（~0.25s）的 7 倍多；算上盘中 90 秒的短 TTL，
+     扫描又是 5 分钟一轮 → 大多数时候是冷的 → 服务端优先反而**净变慢**。
+     所以服务端的定位是「多一跳换可用性」（腾讯直连被网络/跨域挡住时还能跑），
+     不是提速。哪天访问量上来、需要保护上游，再把它翻成主路即可。 */
+async function chanceVerifyOne(code,preBars){
   const s=splitSymbol(code); if(!s) return false;
-  let bars=null;
-  try{ const r=await txKline(s.tencent,'day',800); bars=(r&&r.data)||[]; }catch(e){ return false; }
-  if(bars.length<20) return false;
+  let bars=preBars||null;
+  if(!bars){
+    try{ const r=await txKline(s.tencent,'day',800); bars=(r&&r.data)||[]; }
+    catch(e){
+      try{ const m=await klFetchBatch([code]); bars=(m&&m[code])||null; }catch(e2){ return false; }
+    }
+  }
+  if(!bars||!bars.length||bars.length<20) return false;
   const today=chanceToday().replace(/-/g,'');
   const lastT=String(bars[bars.length-1].t).replace(/-/g,'');
-  /* 目标日那根在序列里的下标：① 极简模式按缓存里的日期精确定位；
-     ② 其余情况取「最后一根非今天」的 —— 容错：数据源把今天这根也发出来了。 */
+  /* 目标日那根在序列里的下标。
+     ⚠ 必须与「粗筛认定的昨日」是同一根，否则复核全灭（几何条件过、图上却对不上）：
+       · all 模式：粗筛用的是 Tushare 的 days[1] 当昨日 → 这里用 CHANCE.lastDay 精确定位；
+       · 自选股 / 选股器：粗筛按「最后一根非今天」取 → 这里用同一条位置规则。
+     容错：显式日期在序列里找不到（长期停牌，这根没成交）→ 退回位置规则。 */
   let yi=-1;
-  if(CHANCE.pool==='last1'&&CHANCE.lastDay){
-    yi=bars.findIndex(k=>String(k.t).replace(/-/g,'')===CHANCE.lastDay.replace(/-/g,''));
-  }else{
-    yi = lastT!==today ? bars.length-1 : bars.length-2;
-  }
+  const ld=String(CHANCE.lastDay||'').replace(/-/g,'');
+  if(ld) yi=bars.findIndex(k=>String(k.t).replace(/-/g,'')===ld);
+  if(yi<1) yi = lastT!==today ? bars.length-1 : bars.length-2;
   if(yi<1) return false;
   let ch=null; try{ ch=calcChan(bars,null); }catch(e){ return false; }
   for(const p of ((ch&&ch.points)||[])){ if(p.i===yi && String(p.type).charAt(0)==='B') return true; }
   return false;
 }
+/* 复核调度：每批 8 只并发（calcChan 要吃 800 根，一次开太多会卡住界面）。
+   取数由 chanceVerifyOne 自己负责（直连腾讯优先、服务端兜底）。 */
 async function chanceVerify(list,onProg){
   const out=[], CONC=8;
   for(let i=0;i<list.length;i+=CONC){
@@ -3520,6 +3584,9 @@ async function chanceScan(){
       if(hint) hint.textContent='最新一根 '+day+'（'+day.slice(4,6)+'/'+day.slice(6,8)+'）· 共 '+list.length+' 只 → 粗筛 '+raw.length+' → 图上确认 '+hit.length;
       CHANCE.busy=false; return;
     }
+    /* 自选股 / 选股器这条腿的「昨日」走「最后一根非今天」的位置规则，
+       所以必须清掉 all 模式可能留下的显式目标日，否则复核会去查错的那根。 */
+    CHANCE.lastDay='';
     const list=await chancePoolList(hint);
     if(!list.length){
       box.innerHTML='<div class="empty">这个范围里还没有标的 —— 换个范围，或先去选股器加载一次结果</div>';
@@ -3546,11 +3613,17 @@ async function chanceScan(){
     }
     hit=hit.slice().sort((a,b)=>b.chg-a.chg);
     CHANCE.items=hit; CHANCE.lastAt=Date.now();
-    if(!hit.length) box.innerHTML='<div class="empty">这一轮没有命中 —— 5 分钟后自动再扫</div>';
+    /* 把实际用的「昨日」显示出来 —— 这模块最容易出问题的就是日期口径，
+       写出来才能一眼确认取的是不是上一个交易日（例：09-28 当天应显示 09-24，
+       因为 09-25 中秋休市、09-26/27 是周末）。 */
+    let pd='';
+    for(const x of list){ const q=CHANCE.prev[x.code]; if(q&&q.d){ pd=q.d; break; } }
+    const pdTxt=pd? (pd.slice(4,6)+'/'+pd.slice(6,8)) : '—';
+    if(!hit.length) box.innerHTML='<div class="empty">昨日 '+pdTxt+' 这一轮没有命中 —— 5 分钟后自动再扫</div>';
     else chanceRender(hit);
     const t=new Date(), hhmm=String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
     if(tm) tm.textContent='命中 '+hit.length+' 只 · '+hhmm;
-    if(hint) hint.textContent='共扫 '+list.length+' 只 → 粗筛 '+raw.length+' 只 → 图上确认 '+hit.length+' 只 · 每 5 分钟自动再扫';
+    if(hint) hint.textContent='昨日 '+pdTxt+' · 共扫 '+list.length+' 只 → 粗筛 '+raw.length+' 只 → 图上确认 '+hit.length+' 只 · 每 5 分钟自动再扫';
   }catch(e){ if(hint) hint.textContent='扫描失败：'+((e&&e.message)||'网络不通'); }
   CHANCE.busy=false;
 }
@@ -4313,11 +4386,17 @@ function drawMktCharts(t,hs,avg){
      （55 页 × 160ms），而**盘前东财 f15/f16 返回字符串 "-"**，转数字全是 NaN →
      5556 只全被判定挡掉 → 命中 0，页面只说「没有命中」，看着像功能坏了。
    现在统一走 **Tushare 全市场单日日线**（`/v1/chance/prev`，一只票一条、200KB 级别），
-   判定所需的四个数全部在里面，**完全不用碰东财**：
-     昨日低点 yl、前日低点 pl          → 判「昨日是不是局部低点」
-     今日(或下一根)开盘 open          → 判「有没有顶破昨日最高」+「有没有创更低的低点」
-   用开盘价代替盘中最低/最高是**近似**：更保守（少推票），且跨零点/盘前都稳定可判。
-   想要盘中精确版，请用「自选股 / 选股器」范围（那条腿走东财 ulist，有 NaN 防护）。 */
+   判定所需的数全部在里面，**完全不用碰东财**（东财是全站最容易被限流的源，别为这条腿去惹它）：
+     昨日低点 yl、前日低点 pl  → 判「昨日是不是局部低点」
+     最新一根 最高 th / 最低 tl → 判「有没有顶破昨日最高」「有没有把昨日低点刷新掉」
+   
+   ⚠ 口径（2026-09-28 修正，之前的注释把它写成「开盘价近似」，与代码不符）：
+     这里是**批量日线表**口径，不是实时行情。Tushare 的 daily 盘后才入库，
+     所以盘中 days[0] 其实是「上一个交易日」——
+       · 傍晚后：days[0]=今天  → 判「今日 顶破 昨日」
+       · 盘中  ：days[0]=上一交易日 → 判「上一交易日 顶破 再前一日」（收盘确认信号）
+     两种情况都用 days[0] 当「顶破的那根」、days[1] 当「形成低点的那根」，逻辑自洽。
+     要盘中实时精确版，用「自选股 / 选股器」范围（那条腿取实时行情，有 NaN 防护）。 */
 const csleep=ms=>new Promise(r=>setTimeout(r,ms));
 const CH_FS='m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23';      // 沪深A股（与训练台同一口径）
 function chanceCacheKey(){ const d=new Date();
@@ -4327,6 +4406,46 @@ function chanceCacheGet(){ try{ const o=JSON.parse(localStorage.getItem(chanceCa
   return null; }
 function chanceCacheSave(o){ try{ localStorage.setItem(chanceCacheKey(),
   JSON.stringify({days:o.days,bars:o.bars,names:o.names||{}})); }catch(e){} }
+/* 腾讯批量报价：一次可塞几百只，响应是一串 JS 全局变量
+   `v_sh600519="1~名称~代码~现价~昨收~今开~…"`。站点本来就用这个套路
+   （盯盘昨收、txKline 的 _var 注入都是它），这里按批注入 <script> 再把变量读回来。
+
+   ⚠ 为什么不走东财：东财是全站最容易被限流的源（平域名直接拒），而腾讯这个口
+     实测 600 只一次、170ms、**返回 600/600 行**，全市场 5557 只只要 11 个请求。
+     （2026-09-28 实测，见 `_tx_batch2.js`。）
+
+   返回 {code:{hi,lo,price,pre,ts,name}}；
+   ts = 行情时间 YYYYMMDDHHMMSS → 用来确认这份行情**确实是今天的**（防停牌/隔夜）。 */
+const TX_BATCH_MAX=500;
+async function txBatchQuotes(codes,onProg){
+  const map={};
+  for(let i=0;i<codes.length;i+=TX_BATCH_MAX){
+    const chunk=codes.slice(i,i+TX_BATCH_MAX);
+    const tens=[];
+    for(const c of chunk){ const sy=splitSymbol(c); if(sy) tens.push(sy.tencent); }
+    if(!tens.length) continue;
+    const ok=await new Promise(function(res){
+      const s=document.createElement('script');
+      s.charset='gbk';
+      s.src='https://qt.gtimg.cn/q='+tens.join(',')+'&_='+Date.now();
+      s.onload=function(){ try{s.remove();}catch(e){} res(true); };
+      s.onerror=function(){ try{s.remove();}catch(e){} res(false); };
+      (document.head||document.body).appendChild(s);
+    });
+    if(ok){
+      for(const c of chunk){
+        const sy=splitSymbol(c); if(!sy) continue;
+        let raw=null; try{ raw=window['v_'+sy.tencent]; }catch(e){}
+        if(!raw) continue;
+        const f=String(raw).split('~');
+        map[c]={ hi:+f[33], lo:+f[34], price:+f[3], pre:+f[4], ts:String(f[30]||''), name:f[1]||'' };
+      }
+    }
+    if(onProg) onProg(Math.min(i+TX_BATCH_MAX,codes.length),codes.length);
+    await csleep(120);
+  }
+  return map;
+}
 async function chanceAllSnapshot(onProg){
   const out=[]; let pn=1, total=0;
   for(;;){
@@ -4357,26 +4476,38 @@ async function chancePrevAll(){
   chanceCacheSave({days:j.days,bars:j.bars,names:j.names});
   return j;
 }
-/* 粗筛：两条都用 Tushare 那一份，不碰东财。
+/* 粗筛：昨日/前日走 Tushare 批量表，今日可走实时行情 —— **全程不碰东财**
+   （东财最容易被限流；腾讯批量报价 600 只一次，全市场 11 个请求，2026-09-28 实测）。
    bars[day][code] = [high, low, close]（Worker 里的紧凑结构）。
-   ① 昨日低点 < 前日低点        —— 昨日是局部低点
-   ② 昨日最高 > 昨日最低 …其实等价，真正的「顶破」看**后一天**：
-      这里用 days[0] 相对 days[1] 的原生口径 —— 即「最新一根」自己就是那根「顶上来的 K 线」。
+   ① 昨日低点 < 前日低点              —— 昨日是局部低点
+   ② 顶破那根 最高 > 昨日最高          —— 顶破
+   ③ 顶破那根 最低 > 昨日低点          —— 没把昨日低点刷新掉
    ⚠ 量级实测（2026-09-23，5556 只）：只做① → 3501 只；加② → 约 300 只。
      3501 只去跑 800 根日线复核要十几分钟，所以②必须在粗筛阶段做掉。
-     ②是必要条件（后一天高点必须越过前一天高点），复核只会再砍，不会误杀。 */
-function chanceAllRaw(days,bars,names){
+     ②③是必要条件，复核只会再砍，不会误杀。
+
+   ◎「顶破那一根」是谁：
+     · Tushare 里已有今天（傍晚之后）→ 用批量表自己的 days[0]，昨日 = days[1]
+     · Tushare 还没出今天（盘中/下午）→ 用传进来的 todayMap（实时行情），昨日 = days[0]
+   两种情况的「昨日」都是「形成低点的那根」，也就是复核要验的那根（= CHANCE.lastDay）。 */
+function chanceAllRaw(days,bars,names,todayMap){
   const out=[];
-  if(days.length<3) return out;
-  const T=bars[days[0]]||{}, Y=bars[days[1]]||{}, P=bars[days[2]]||{};
-  for(const c in T){
-    const t=T[c], y=Y[c], p=P[c];
+  const tk=chanceToday().replace(/-/g,'');
+  const hasToday=String(days[0]).replace(/-/g,'')===tk;
+  const iY=hasToday?1:0, iP=iY+1;                  // 昨日 / 前日 在 days 里的下标
+  if(days.length<iP+1) return out;
+  /* 顶破那一根：优先用实时行情（它一定代表"今天"），没有就用批量表最新那根 */
+  const TT=todayMap||bars[days[0]]||{};
+  const Y=bars[days[iY]]||{}, P=bars[days[iP]]||{};
+  for(const c in Y){
+    const t=TT[c], y=Y[c], p=P[c];
     if(!t||!y||!p) continue;
     const th=+t[0], tl=+t[1], yh=+y[0], yl=+y[1], pl=+p[1], yc=+y[2], tc=+t[2];
     if(!isFinite(th)||!isFinite(tl)||!isFinite(yh)||!isFinite(yl)||!isFinite(pl)) continue;
+    if(!(th>0)||!(tl>0)) continue;          // 停牌 / 尚未开盘 → 没有当日行情，跳过
     if(!(yl<pl)) continue;                  // ① 昨日是局部低点
-    if(!(th>yh)) continue;                  // ② 最新一根顶破昨日最高
-    if(!(tl>yl)) continue;                  // ③ 最新一根没把昨日低点刷新掉
+    if(!(th>yh)) continue;                  // ② 顶破那根越过昨日最高
+    if(!(tl>yl)) continue;                  // ③ 没把昨日低点刷新掉
     out.push({code:c, name:names[c]||'', yh:yh, yl:yl,
       price:isFinite(tc)?tc:null,
       chg:(isFinite(tc)&&isFinite(yc)&&yc>0)?+((tc/yc-1)*100).toFixed(2):null});
@@ -4398,11 +4529,50 @@ async function chanceScanAll(){
     }
   }
   const days=data.days, bars=data.bars||{}, names=data.names||{};
-  let hit=chanceAllRaw(days,bars,names);
-  if(hint) hint.textContent='Tushare 全市场 '+days[0]+'（'+(days||[]).join('/')+'）→ 粗筛 '+hit.length+' 只';
-  /* 复核：粗筛只是必要条件，最终以「图上真的有买点标签」为准（见 chanceVerify 注释）。 */
+  /* ⚠ all 模式的口径（2026-09-28 重做）：
+       昨日 / 前日 走 Tushare 批量表（一次拿全市场，便宜）；
+       「今日」优先用批量表自己的（傍晚之后 Tushare 已入库），
+       没入库就用**腾讯批量实时行情**补上 —— 600 只一个请求、全市场 11 个请求，
+       **完全不用碰东财**（东财最容易被限流）。
+       这样「盘中」与「傍晚后」结果一致：都是判「今日 顶破 昨日」。 */
+  const tk=chanceToday().replace(/-/g,'');
+  const hasToday=String(days[0]||'').replace(/-/g,'')===tk;
+  const iY=hasToday?1:0, iP=iY+1;
+  const dayT=hasToday? String(days[0]) : tk;          // 顶破那一根（可能是实时）
+  const dayY=String(days[iY]||'');                    // 形成低点那一根 = 复核目标
+  CHANCE.lastDay=dayY;
+  const fmtD=function(d){ d=String(d||'').replace(/-/g,''); return d.length===8? (d.slice(4,6)+'/'+d.slice(6,8)) : '—'; };
+  /* Tushare 还没出今天 → 先用实时行情补齐「今日」 */
+  let todayMap=null, liveStale=0, liveGot=0;
+  if(!hasToday){
+    if(hint) hint.textContent='Tushare 尚未入库今天，改取实时行情（昨日 '+fmtD(dayY)+'）…';
+    const want=Object.keys(bars[days[0]]||{});
+    let tx={};
+    try{ tx=await txBatchQuotes(want,function(d,n){ if(hint) hint.textContent='取实时行情 '+d+'/'+n+' …'; }); }
+    catch(e){ tx={}; }
+    todayMap={};
+    for(const c in tx){
+      const q=tx[c];
+      liveGot++;
+      if(String(q.ts).slice(0,8)!==tk) { liveStale++; continue; }   // 行情不是今天的（停牌/隔夜）
+      if(!(q.hi>0)||!(q.lo>0)) { liveStale++; continue; }          // 尚未开盘
+      todayMap[c]=[q.hi,q.lo,q.price];
+    }
+    if(!Object.keys(todayMap).length){
+      box.innerHTML='<div class="empty">今天还没有行情能用来判定'
+        +'（非交易日，或尚未开盘 / 全部停牌）—— 已取到 '+liveGot+' 只，其中当日有效的 0 只</div>';
+      if(hint) hint.textContent='没有当日行情 · 已取 '+liveGot+' 只 · 停牌或未开盘 '+liveStale+' 只';
+      return null;
+    }
+    if(hint) hint.textContent='实时行情就绪：有效 '+Object.keys(todayMap).length+' 只（跳过非当日 '+liveStale+' 只）';
+  }
+  const srcTxt=hasToday? 'Tushare 今日' : '实时行情今日';
+  let hit=chanceAllRaw(days,bars,names,todayMap);
+  if(hint) hint.textContent='全市场 '+days.length+' 天（'+(days||[]).join(' / ')+'）· 顶破那根取「'+srcTxt+'」'
+    +' → 判定「'+fmtD(dayT)+' 顶破 '+fmtD(dayY)+'」 → 粗筛 '+hit.length+' 只';
+  /* 复核：粗筛只是必要条件，最终以「图上真的有买点标签」为准（见 chanceVerifyOne 注释）。 */
   if(hit.length){
-    if(hint) hint.textContent='复核 '+hit.length+' 只（跑图上同一套缠论标注）…';
+    if(hint) hint.textContent='复核 '+hit.length+' 只（跑图上同一套缠论标注，目标日 '+fmtD(dayY)+'）…';
     hit=await chanceVerify(hit,function(d,n,ok){
       if(hint) hint.textContent='复核 '+d+'/'+n+'（图上确认 '+ok.length+' 只）…';
       if(ok.length) chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; }));
@@ -4410,9 +4580,9 @@ async function chanceScanAll(){
   }
   hit.sort(function(a,b){ return (b.chg||0)-(a.chg||0); });
   CHANCE.items=hit; CHANCE.lastAt=Date.now();
-  const t2=new Date();
-  if(tm) tm.textContent='命中 '+hit.length+' 只 · '+String(t2.getHours()).padStart(2,'0')+':'+String(t2.getMinutes()).padStart(2,'0');
-  if(!hit.length) box.innerHTML='<div class="empty">最新一根 '+days[0]+' 上没有顶破昨日最高价的标的</div>';
+  const t2=new Date(), hh2=String(t2.getHours()).padStart(2,'0')+':'+String(t2.getMinutes()).padStart(2,'0');
+  if(tm) tm.textContent='命中 '+hit.length+' 只 · '+hh2;
+  if(!hit.length) box.innerHTML='<div class="empty">'+fmtD(dayT)+' 这根上没有顶破 '+fmtD(dayY)+' 最高价的标的</div>';
   return hit;
 }
 (async function(){
