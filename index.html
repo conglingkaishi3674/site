@@ -1587,16 +1587,28 @@ function secCacheSave(industry,list,src){
 async function fetchAllSectors(industry){
   const errs=[];
   const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
-  /* ① 东财中转（主力） */
+  /* ⚠ 中转口在「上游全挂」时会吐它自己的陈旧缓存（ok=true 但 fresh=false）。
+     这种**不能当成成功收工** —— 否则新浪那条容灾腿永远走不到。
+     2026-09-28 实测：东财从 CF 出口不可达，中转 15 秒后回陈旧数据（fresh=false），
+     前端原来直接 return，而当时**新浪是好的、还能给新鲜数据**，结果页面一直显示
+     「上游暂不可用·显示 N 分钟前数据」，用户问「以前不是会降级到新浪吗」。
+     现在：陈旧的先留着，继续往下试直连与新浪，只有在都不行时才拿它兜底。 */
+  let staleRelay=null;
   try{
     const r=await fetch(base+'/v1/em/sectors?type='+(industry?'industry':'concept'),{cache:'no-store'});
     const j=await r.json();
     if(j&&j.ok&&j.list&&j.list.length){
-      SEC_SRC='em';
-      secCacheSave(industry,j.list,'em');
-      return {list:j.list,src:'relay',fresh:j.fresh!==false,at:Date.now()};
+      if(j.fresh!==false){
+        SEC_SRC='em';
+        secCacheSave(industry,j.list,'em');
+        return {list:j.list,src:'relay',fresh:true,at:Date.now()};
+      }
+      /* 陈旧的：先记下，**不写进本地缓存**（别让陈旧数据覆盖掉本地可能更新的那份） */
+      staleRelay={list:j.list,at:Date.now()};
+      errs.push('中转·上游不可用（陈旧数据留作兜底）');
+    }else{
+      errs.push('中转·'+((j&&j.error)||('HTTP '+r.status)));
     }
-    errs.push('中转·'+((j&&j.error)||('HTTP '+r.status)));
   }catch(e){ errs.push('中转·'+((e&&e.message)||'失败')); }
   /* ② 直连东财多节点：域名级熔断 + 路径级退避
      两种故障要分开治：
@@ -1641,7 +1653,9 @@ async function fetchAllSectors(industry){
     }
     errs.push('新浪·'+((j&&j.error)||('HTTP '+r.status)));
   }catch(e){ errs.push('新浪·'+((e&&e.message)||'失败')); }
-  /* ④ 本地缓存 */
+  /* ④ 兜底：中转的陈旧数据（东财全挂时服务端自己的缓存）→ 再不行才用本地缓存。
+     顺序放在新浪之后 —— 新鲜的新浪数据比陈旧的东财数据更有用（口径不同会在界面上标注）。 */
+  if(staleRelay) return {list:staleRelay.list,src:'relay',fresh:false,at:staleRelay.at};
   const c=secCacheGet(industry);
   if(c) return {list:c.list,src:c.src||'cache',fresh:false,at:c.at,cached:true};
   throw new Error("板块列表抓取失败（"+errs.slice(0,3).join(' | ')+"）");
@@ -3309,6 +3323,19 @@ function chanceJudge(q,p){
      是直连（~0.25s）的 7 倍多。盘中 TTL 90 秒、扫描 5 分钟一轮，多数时候是冷的，
      所以「服务端优先」会净变慢。它的价值是**可用性**（腾讯直连被挡时的第二条路）；
      等访问量上来需要保护上游时，把它翻成主路即可。 */
+/* 服务端「全市场今日快照」：Worker `/v1/mkt/today` → Tushare `rt_k`（实时日线）。
+   ⚠ 现状（2026-09-28 实测 + 数据商客服确认）：**当前这个网关根本没有 A股实时日线**，
+     所以它会一直回 `ok:false`。这里返回 null，由调用方回落到**前端直连腾讯**
+     （那条路已经验证过，且比绕服务端快）。所以这个函数**失败是正常路径**，不抛错。
+     判定逻辑与取数解耦：哪天换了数据源（自建 / 别家网关 / 单位 CHOICE），这条腿自动生效。
+   ⚠ 基准地址在函数体内取（同 klFetchBatch：同块内的 const 在模块级还在 TDZ 里）。 */
+async function mktTodayFetch(){
+  const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
+  const r=await fetch(base+'/v1/mkt/today',{cache:'no-store'});
+  const j=await r.json();
+  if(!j||!j.ok||!j.quotes) return null;
+  return j;
+}
 const KL_BATCH=20;      // 与服务端单次上限一致（服务端要留 subrequest 额度）
 async function klFetchBatch(codes){
   /* ⚠ 基准地址必须在函数**体内**取，不能在模块级取：
@@ -4542,29 +4569,53 @@ async function chanceScanAll(){
   const dayY=String(days[iY]||'');                    // 形成低点那一根 = 复核目标
   CHANCE.lastDay=dayY;
   const fmtD=function(d){ d=String(d||'').replace(/-/g,''); return d.length===8? (d.slice(4,6)+'/'+d.slice(6,8)) : '—'; };
-  /* Tushare 还没出今天 → 先用实时行情补齐「今日」 */
+  /* Tushare 还没出今天 → 补「今日」的行情。取数优先级：
+     ① 服务端 `/v1/mkt/today`（Tushare `rt_k` 实时日线：**一次请求拿全市场今日 OHLC**；
+        ⚠ 当前网关无此接口 → 实际总是走 ②，这是预期而非故障）；
+     ② 它没覆盖到的（权限没开 / 北交所等）再用腾讯批量报价补齐 —— 前端直连腾讯比绕服务端更快。
+     两条腿都失败就明确报「今天还没有行情」，不拿隔夜数据冒充今天。 */
   let todayMap=null, liveStale=0, liveGot=0;
   if(!hasToday){
-    if(hint) hint.textContent='Tushare 尚未入库今天，改取实时行情（昨日 '+fmtD(dayY)+'）…';
     const want=Object.keys(bars[days[0]]||{});
-    let tx={};
-    try{ tx=await txBatchQuotes(want,function(d,n){ if(hint) hint.textContent='取实时行情 '+d+'/'+n+' …'; }); }
-    catch(e){ tx={}; }
     todayMap={};
-    for(const c in tx){
-      const q=tx[c];
-      liveGot++;
-      if(String(q.ts).slice(0,8)!==tk) { liveStale++; continue; }   // 行情不是今天的（停牌/隔夜）
-      if(!(q.hi>0)||!(q.lo>0)) { liveStale++; continue; }          // 尚未开盘
-      todayMap[c]=[q.hi,q.lo,q.price];
+    let mkt=null;
+    try{
+      if(hint) hint.textContent='取全市场今日行情…';
+      mkt=await mktTodayFetch();
+    }catch(e){ mkt=null; }
+    if(mkt&&mkt.quotes){
+      for(const c in mkt.quotes){
+        const q=mkt.quotes[c];
+        if(!q||!(+q[0]>0)||!(+q[1]>0)) continue;
+        todayMap[c]=[+q[0],+q[1],+q[2]];
+      }
+    }
+    const mktN=Object.keys(todayMap).length;
+    const miss=want.filter(function(c){ return !todayMap[c]; });
+    if(miss.length){
+      if(hint) hint.textContent=(mktN?('服务端给了 '+mktN+' 只，'):'')+'余下 '+miss.length+' 只用腾讯报价补…';
+      let tx={};
+      try{ tx=await txBatchQuotes(miss,function(d,n){ if(hint) hint.textContent='取实时行情 '+d+'/'+n+' …'; }); }
+      catch(e){ tx={}; }
+      for(const c in tx){
+        const q=tx[c];
+        liveGot++;
+        if(String(q.ts).slice(0,8)!==tk) { liveStale++; continue; }   // 行情不是今天的（停牌/隔夜）
+        if(!(q.hi>0)||!(q.lo>0)) { liveStale++; continue; }          // 尚未开盘
+        todayMap[c]=[q.hi,q.lo,q.price];
+      }
     }
     if(!Object.keys(todayMap).length){
       box.innerHTML='<div class="empty">今天还没有行情能用来判定'
-        +'（非交易日，或尚未开盘 / 全部停牌）—— 已取到 '+liveGot+' 只，其中当日有效的 0 只</div>';
-      if(hint) hint.textContent='没有当日行情 · 已取 '+liveGot+' 只 · 停牌或未开盘 '+liveStale+' 只';
+        +'（非交易日，或尚未开盘 / 全部停牌）</div>';
+      if(hint) hint.textContent='没有当日行情 · 服务端快照 '+(mktN?(mktN+' 只'):'不可用')
+        +' · 腾讯 '+(miss.length?('已取 '+liveGot+' 只'):'无需补')+' · 非当日/停牌 '+liveStale+' 只';
       return null;
     }
-    if(hint) hint.textContent='实时行情就绪：有效 '+Object.keys(todayMap).length+' 只（跳过非当日 '+liveStale+' 只）';
+    if(hint) hint.textContent='今日行情就绪 '+Object.keys(todayMap).length+' 只'
+      +(mktN?('（服务端快照 '+mktN+' 只）'):'（实时报价）')
+      +((miss.length&&liveGot)?(' · 腾讯补 '+liveGot+' 只'):'')
+      +((liveStale>0)?(' · 跳过非当日/停牌 '+liveStale+' 只'):'');
   }
   const srcTxt=hasToday? 'Tushare 今日' : '实时行情今日';
   let hit=chanceAllRaw(days,bars,names,todayMap);
