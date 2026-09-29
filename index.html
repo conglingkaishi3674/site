@@ -2491,8 +2491,8 @@ async function newsLoad(force){
 function newsFmtSize(n){ n=+n||0; if(!n) return ''; return n>1048576 ? ((n/1048576).toFixed(1)+' MB') : (Math.max(1,Math.round(n/1024))+' KB'); }
 function newsRender(items){
   const box=document.getElementById('newsList'); if(!box) return;
-  /* 图片代理口：知识星球图床（images.zsxq.com）做了 Referer 白名单，外站直连只会拿到
-     「未经允许不可引用」那张占位图（302 到 zsxq403.jpg，它本身是张正常 jpg ⇒ onerror 抓不到）。
+  /* 图片代理口：源站图床做了 Referer 白名单，外站直连只会拿到那张「未经允许不可引用」的
+     占位图（前端表现为 302 到一张 403 图 —— 它本身是张正常 jpg，所以 onerror 抓不到）。
      统一走服务端 /v1/news/img 代取，顺带在 CF 边缘缓存，原帖签名过期后还能继续显示。
      ⚠ 取址写在函数体内（跨 script 块直接 typeof CH_API 会 TDZ 抛错）。 */
   const nbase=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
