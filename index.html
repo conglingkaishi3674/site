@@ -906,6 +906,7 @@
  .news-card .nfn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
  .news-card .nfs{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
  .news-card .nfx{margin-top:7px}
+ .news-card .nfh{margin-top:6px;color:var(--muted);font-size:11.5px}
  .news-card .nfxb{background:none;border:1px solid var(--line);border-radius:8px;
    color:var(--amber);font-size:12px;padding:4px 10px;cursor:pointer;font-family:inherit}
  .news-card .nfxb:hover{border-color:var(--amber)}
@@ -1481,6 +1482,7 @@
      <div class="module-title">
       <h2>消息面</h2>
       <p><b>按天分组、时间倒序</b>，长文点开看全文；带图片 / 附件的条目会一并显示，附件正文可就地展开。
+       <span class="news-cap">附件多集中在<b>早间和夜间</b>发布，默认范围里看不到时，把范围调到 200 条。</span>
        <span class="news-cap">内容由采集端定时汇总，服务端按条目编号<b>自动去重</b>，所以多台机器互为备份也不会重复。</span>
        <span class="news-cap">这里<b>不做实时轮询</b>：进页签读一次、需要时点「⟳ 刷新」。只想看某一天，点旁边的 📅 选日期。</span></p>
      </div>
@@ -2549,6 +2551,10 @@ function newsRender(items){
           +'<span class="nfn" title="'+newsEsc(f.n)+'">'+newsEsc(f.n)+'</span>'
           +(f.s?('<span class="nfs">'+newsFmtSize(f.s)+'</span>'):'')+'</span>';
       }).join('')+'</div>';
+    }
+    /* 提取不出文字的附件给个明确交代 —— 否则用户会以为是按钮丢了 / 功能坏了 */
+    if(fls.length&&!x.fxl){
+      html+='<div class="nfh">该附件暂无法提取文字（扫描件或字体不含可读文本）</div>';
     }
     /* 附件正文：PDF 已提取成文字存在服务端，点开才拉（全文可能上万字，不进首屏） */
     if(x.fxl){
