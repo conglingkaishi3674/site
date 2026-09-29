@@ -856,7 +856,76 @@
   /* --- R. 表格字号统一收一档（窄屏挤） --- */
   table{font-size:12px}
   .db-tbl th,.db-tbl td{padding:5px 5px}
-}
+ }
+
+ /* ---------- 模块八：消息面 ---------- */
+ .news-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:2px 0 12px}
+ .news-lab{font-size:12px;color:var(--muted)}
+ .news-bar select{background:var(--bg-soft);color:var(--text);border:1px solid var(--line);
+   border-radius:8px;padding:5px 8px;font-size:12.5px;font-family:inherit}
+ .news-hint{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+ .news-bar select:disabled{opacity:.45;cursor:not-allowed}
+ /* 日历按钮：跟右栏讨论区那颗 📅 同一套做法 —— 点开弹原生日历，选完只看那一天 */
+ .news-cal{flex:0 0 auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+   border-radius:9px;cursor:pointer;background:var(--bg-soft);border:1px solid var(--line);
+   font-size:14px;line-height:1;padding:0;color:inherit}
+ .news-cal:hover{border-color:var(--amber)}
+ .news-cal.on{background:rgba(255,212,121,.16);border-color:rgba(255,212,121,.55)}
+ #newsDate{display:none;background:var(--bg-soft);color:var(--text);border:1px solid var(--line);
+   border-radius:8px;padding:5px 8px;font-size:12.5px;font-family:inherit}
+ .news-cap{display:block;font-size:11.5px;color:var(--muted);line-height:1.72;margin-top:3px}
+ .news-wrap{display:flex;flex-direction:column;gap:8px}
+ .news-wrap .empty{border:1px solid var(--line);border-radius:12px;padding:16px;
+   text-align:center;color:var(--muted);font-size:12.5px;background:rgba(255,255,255,.02)}
+ .news-day{font-size:12px;color:var(--muted);margin:10px 0 2px;padding-bottom:5px;
+   border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+ .news-day .nd{font-size:11px;opacity:.65}
+ .news-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+ .news-card .nh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:5px}
+ .news-card .ntm{font-size:12px;color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
+ .news-card .nmeta{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+ .news-card .nx{white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.72}
+ .news-card.long .nx{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+ .news-card.long.open .nx{display:block;-webkit-line-clamp:unset}
+ .news-card .nmore{background:none;border:0;color:var(--amber);font-size:12px;padding:4px 0 0;
+   cursor:pointer;font-family:inherit}
+ .news-card .nmore:hover{text-decoration:underline}
+ .news-card .nimg{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px;margin-top:8px}
+ .news-card .ni{position:relative;display:block;border:1px solid var(--line);border-radius:8px;
+   overflow:hidden;background:rgba(255,255,255,.03)}
+ .news-card .ni img{display:block;width:100%;height:112px;object-fit:cover}
+ .news-card .ni.tall img{height:190px}
+ .news-card .ni .nbad{display:none;align-items:center;justify-content:center;
+   height:112px;font-size:11px;color:var(--muted)}
+ .news-card .ni.tall .nbad{height:190px}
+ .news-card .ni.bad img{display:none}
+ .news-card .ni.bad .nbad{display:flex}
+ .news-card .nfl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+ .news-card .nf{display:inline-flex;align-items:center;gap:5px;max-width:100%;
+   border:1px solid var(--line);border-radius:8px;padding:4px 8px;background:rgba(255,255,255,.03);font-size:12px}
+ .news-card .nfn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+ .news-card .nfs{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+ .news-card .nfx{margin-top:7px}
+ .news-card .nfxb{background:none;border:1px solid var(--line);border-radius:8px;
+   color:var(--amber);font-size:12px;padding:4px 10px;cursor:pointer;font-family:inherit}
+ .news-card .nfxb:hover{border-color:var(--amber)}
+ .news-card .nfxt{margin-top:7px;padding:9px 11px;border-left:2px solid var(--line);
+   background:rgba(255,255,255,.02);border-radius:0 8px 8px 0;
+   font-size:12.5px;line-height:1.72;color:var(--text);white-space:pre-wrap;
+   word-break:break-word;max-height:420px;overflow-y:auto}
+ .news-card .nfxt:empty{display:none}
+ @media (max-width:768px){
+   .news-bar{gap:7px}
+   .news-card{padding:9px 10px;border-radius:10px}
+   .news-card .nx{font-size:13px}
+   .news-bar select,.news-bar .btn{font-size:12px}
+   .news-card .nimg{grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:5px}
+   .news-card .ni img{height:92px}
+   .news-card .ni.tall img{height:150px}
+   .news-card .ni .nbad{height:92px}
+   .news-card .ni.tall .nbad{height:150px}
+   .news-card .nfn{max-width:150px}
+ }
 </style>
 </head>
 <body>
@@ -874,6 +943,7 @@
    <button class="tab-btn sb-item" data-tab="soon"><span class="sb-ico">🎯</span><span class="sb-txt"><b>模拟 · 排位</b><i>历史片段 · 随机标的</i></span></button>
    <button class="tab-btn sb-item" data-tab="chance"><span class="sb-ico">🔥</span><span class="sb-txt"><b>今日机会</b><i>昨日买点刚刷新</i></span></button>
    <button class="tab-btn sb-item" data-tab="data"><span class="sb-ico">📊</span><span class="sb-txt"><b>数据浏览</b><i>期指持仓 · 机构动向</i></span></button>
+   <button class="tab-btn sb-item" data-tab="news"><span class="sb-ico">📰</span><span class="sb-txt"><b>消息面</b><i>资讯速览 · 自动同步</i></span></button>
   </nav>
   <div class="sb-bottom">
    <button class="sb-toggle" id="sbToggle" title="收起 / 展开侧栏"><span class="sb-ico">«</span><span class="sb-txt">收起侧栏</span></button>
@@ -1399,6 +1469,38 @@
    </div>
 
    <div class="kt-toast" id="ktToast"></div>
+  </section>
+
+   <!-- ============ 模块八：消息面 ============
+        内容由**外部采集端**定时汇总后投递到服务端存库，本页只负责读与展示。
+        ⚠ 刻意**不做轮询**：这类资讯不需要秒级新鲜，进页签读一次、需要时手动刷新即可。
+        ⚠ 采集与展示完全解耦：采集端做几台机器、重复跑几遍都不会重复
+          （服务端按条目编号去重，见 /v1/news/push 的 upsert）。 -->
+   <section class="section" id="sec-news">
+    <div class="module-header">
+     <div class="module-title">
+      <h2>消息面</h2>
+      <p><b>按天分组、时间倒序</b>，长文点开看全文；带图片 / 附件的条目会一并显示，附件正文可就地展开。
+       <span class="news-cap">内容由采集端定时汇总，服务端按条目编号<b>自动去重</b>，所以多台机器互为备份也不会重复。</span>
+       <span class="news-cap">这里<b>不做实时轮询</b>：进页签读一次、需要时点「⟳ 刷新」。只想看某一天，点旁边的 📅 选日期。</span></p>
+     </div>
+     <div class="timestamp" id="newsTime">—</div>
+    </div>
+
+    <div class="news-bar">
+     <span class="news-lab">显示</span>
+     <select id="newsRange">
+      <option value="40">最近 40 条</option>
+      <option value="120">最近 120 条</option>
+      <option value="200">最近 200 条</option>
+     </select>
+     <button class="news-cal" id="newsCal" title="按日期查看某一天">📅</button>
+     <input type="date" id="newsDate" title="查看某一天的消息">
+     <button class="btn" id="newsGo">⟳ 刷新</button>
+     <span class="news-hint" id="newsHint">—</span>
+    </div>
+
+   <div class="news-wrap" id="newsList"><div class="empty">正在读取…</div></div>
   </section>
 
   </main>
@@ -1934,6 +2036,7 @@ document.getElementById("kindBtn").onclick=()=>{CFG.industry=!CFG.industry;HISTO
 document.getElementById("refreshBtn").onclick=()=>{
   const at=activeTab();
   dispatchRefresh();                                    // 当前模块按模式刷（内部有自己的 busy 防抖）
+  if(at==="news" && typeof newsLoad==='function') newsLoad(1);   // 消息面：忽略 30 秒节流，强制拉一次
   if(at!=="flow" && !busy) refresh();                   // 板块资金流后台也刷（成功后同样会校准 nextAt）
   if(at!=="watch" && WATCH && WATCH.length) refreshWatch();
   if(!busy) nextAt=Date.now()+flowIntervalSec()*1000;   // 倒计时立刻重置
@@ -2310,6 +2413,181 @@ function dispatchRefresh(){
   else if(at==="data"){ /* 数据浏览：日频数据，进模块时加载一次即可，不随全局刷新 */ }
   else { if(!busy) refresh(); }
 }
+/* ============ 模块八：消息面 ============
+   数据链路：外部采集端定时汇总 → POST 给 Worker 存库 → 这里读。
+   ⚠ 刻意**不做轮询**：这类资讯不需要秒级新鲜，进页签读一次、需要时手动刷新即可。
+   ⚠ 采集端与展示端完全解耦：采集做几台机器、重复跑几遍都不会重复（服务端按条目编号去重）。
+   ⚠ NEWS.day 非空 = 只看那一天（由工具条那颗 📅 设定），此时走服务端 WHERE day=? 分支。 */
+const NEWS={busy:false,last:null,at:0,day:''};
+function newsEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function newsDay(d){ if(!d||d.length<10) return '—'; return (+d.slice(5,7))+' 月 '+(+d.slice(8,10))+' 日'; }
+async function newsLoad(force){
+  if(NEWS.busy) return;
+  /* 30 秒节流：反复切页签不会反复打接口；「⟳ 刷新」传 force 绕过 */
+  if(!force && NEWS.at && Date.now()-NEWS.at<30000) return;
+  const box=document.getElementById('newsList');
+  if(!box) return;
+  const hint=document.getElementById('newsHint'), tm=document.getElementById('newsTime');
+  const sel=document.getElementById('newsRange');
+  const n = NEWS.day ? 200 : +((sel&&sel.value)||40);
+  /* 单日模式下「最近 N 条」没有意义（那天尽量拉全，服务端上限 200），把下拉置灰 */
+  if(sel) sel.disabled = !!NEWS.day;
+  NEWS.busy=true; NEWS.at=Date.now();
+  if(hint) hint.textContent = NEWS.day ? ('读取 '+newsDay(NEWS.day)+' …') : '读取中…';
+  try{
+    /* ⚠ CH_API 是同块后面的 const，**必须在函数体内取** —— 模块级取会撞 TDZ
+       （同块内 typeof CH_API 也会抛，这是踩过的坑）。 */
+    const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
+    /* day 非空 = 「只看这一天」（日历选出来的），交给服务端过滤，不拉全量再前端筛 */
+    const q = NEWS.day ? ('&day='+encodeURIComponent(NEWS.day)) : '';
+    const r=await fetch(base+'/v1/news?n='+n+q+'&_t='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+    NEWS.last=j;
+    newsRender(j.items||[]);
+    if(hint){
+      if(NEWS.day){
+        const cnt=(j.items||[]).length;
+        hint.textContent = newsDay(NEWS.day)+'（'+NEWS.day+'）：'+cnt+' 条'
+          + (j.more ? ('（当天还有更早的，只取了最新 '+cnt+' 条）') : '');
+      }else{
+        hint.textContent='服务端共 '+j.total+' 条'+(j.latest?(' · 最新 '+j.latest.slice(5,16).replace('T',' ')):'');
+      }
+    }
+    if(tm) tm.textContent=new Date().toLocaleTimeString('zh-CN',{hour12:false});
+  }catch(e){
+    box.innerHTML='<div class="empty">读取失败：'+newsEsc(String((e&&e.message)||e).slice(0,140))+'</div>';
+    if(hint) hint.textContent='读取失败';
+  }
+  NEWS.busy=false;
+}
+
+/* ---- 日历：跟右栏讨论区那颗 📅 同一套做法 ----
+   点 📅 → 展开原生日期框并弹出日历 → 选完只看那一天；再点 📅 收起。
+   回到「最近 N 条」：把日期框清空（Chrome 自带的 ×）→ 触发 change → NEWS.day 置空。 */
+(function(){
+  const cal=document.getElementById('newsCal'), ds=document.getElementById('newsDate');
+  if(!cal||!ds) return;
+  let open=false;
+  cal.onclick=function(){
+    open=!open;
+    /* ⚠ 必须给显式 "block"/"none"：置空字符串会回落到 CSS 里的 #newsDate{display:none}，
+       表现就是「点了没反应」—— 右栏那个日历踩过两次这个坑。 */
+    ds.style.display=open?'block':'none';
+    if(open){
+      if(NEWS.day) ds.value=NEWS.day;
+      /* Chrome 上直接把原生日历弹开（showPicker 需要用户手势，点击本身就是）；
+         内核旧不支持时静默跳过，点输入框也能弹。 */
+      try{ if(ds.showPicker) ds.showPicker(); }catch(e){ }
+    }
+  };
+  ds.onchange=function(){
+    NEWS.day=ds.value||'';
+    cal.classList.toggle('on',!!NEWS.day);
+    cal.title=NEWS.day?('正在看 '+newsDay(NEWS.day)+' · 点此换日期'):'按日期查看某一天';
+    newsLoad(true);
+  };
+})();
+function newsFmtSize(n){ n=+n||0; if(!n) return ''; return n>1048576 ? ((n/1048576).toFixed(1)+' MB') : (Math.max(1,Math.round(n/1024))+' KB'); }
+function newsRender(items){
+  const box=document.getElementById('newsList'); if(!box) return;
+  if(!items.length){
+    box.innerHTML='<div class="empty">'
+      +(NEWS.day
+        ? '这一天没有消息 —— 换个日期；想回到「最近 N 条」，把日期框清空即可'
+        : '还没有数据 —— 等下一次采集，或在采集机上手动跑一次')
+      +'</div>';
+    return;
+  }
+  const cnt={};
+  items.forEach(function(x){ const d=String(x.d||String(x.at||'').slice(0,10)); cnt[d]=(cnt[d]||0)+1; });
+  let html='', cur='';
+  items.forEach(function(x){
+    const at=String(x.at||'');
+    const d=String(x.d||at.slice(0,10));
+    if(d!==cur){ cur=d; html+='<div class="news-day">'+newsDay(d)+' <span class="nd">'+cnt[d]+' 条</span></div>'; }
+    const body=String(x.x||'');
+    const imgs=Array.isArray(x.img)?x.img:[];
+    const fls=Array.isArray(x.fl)?x.fl:[];
+    const dups=Array.isArray(x.dup)?x.dup:[];
+    const long=body.length>200;
+    const meta=[];
+    if(body.length) meta.push(body.length+' 字');
+    if(x.c) meta.push(x.c+' 评论');
+    if(x.k) meta.push(x.k+' 赞');
+    if(imgs.length) meta.push(imgs.length+' 图');
+    if(fls.length) meta.push(fls.length+' 附件');
+    if(dups.length) meta.push('另有 '+dups.length+' 个来源');
+
+    html+='<article class="news-card'+(long?' long':'')+'">'
+      +'<div class="nh"><span class="ntm">'+at.slice(11,16)+'</span>'
+      +'<span class="nmeta">'+newsEsc(meta.join(' · '))+'</span></div>'
+      +(body?'<div class="nx">'+newsEsc(body)+'</div>':'')
+      +(long?'<button class="nmore">展开全文</button>':'');
+
+    /* 图片：网格缩略图，点开看原图（新标签）。短帖只有图的情况很常见，所以图一定要显示。 */
+    if(imgs.length){
+      html+='<div class="nimg">'+imgs.map(function(m,i){
+        const ratio=(m.w&&m.h)?(m.h/Math.max(1,m.w)):0;
+        return '<a class="ni'+(ratio>2.2?' tall':'')+'" href="'+newsEsc(m.lu||m.u)+'" target="_blank" rel="noopener" title="点击看原图">'
+          +'<img src="'+newsEsc(m.u)+'" loading="lazy" alt="图 '+(i+1)+'">'
+          +'<span class="nbad">原图已过期</span></a>';
+      }).join('')+'</div>';
+    }
+    /* 附件：接口不提供下载链接，只显示名称与体积；PDF 正文由下方「附件正文」按需展开 */
+    if(fls.length){
+      html+='<div class="nfl">'+fls.map(function(f){
+        return '<span class="nf"><span class="nfi">📄</span>'
+          +'<span class="nfn" title="'+newsEsc(f.n)+'">'+newsEsc(f.n)+'</span>'
+          +(f.s?('<span class="nfs">'+newsFmtSize(f.s)+'</span>'):'')+'</span>';
+      }).join('')+'</div>';
+    }
+    /* 附件正文：PDF 已提取成文字存在服务端，点开才拉（全文可能上万字，不进首屏） */
+    if(x.fxl){
+      html+='<div class="nfx"><button class="nfxb" data-tid="'+newsEsc(x.id)+'" data-n="'+x.fxl+'">附件正文 '+x.fxl+' 字</button>'
+        +'<div class="nfxt"></div></div>';
+    }
+    html+='</article>';
+  });
+  box.innerHTML=html;
+  box.querySelectorAll('.nmore').forEach(function(b){
+    b.onclick=function(){
+      const c=b.parentNode; c.classList.toggle('open');
+      b.textContent=c.classList.contains('open')?'收起':'展开全文';
+    };
+  });
+  /* 附件正文按需拉取（全文可能上万字，只在点开时才传输，不进首屏） */
+  box.querySelectorAll('.nfxb').forEach(function(b){
+    b.onclick=function(){
+      const holder=b.parentNode.querySelector('.nfxt');
+      if(holder.dataset.on==='1'){
+        holder.dataset.on='0'; holder.textContent='';
+        b.textContent='附件正文 '+b.getAttribute('data-n')+' 字';
+        return;
+      }
+      b.textContent='读取中…';
+      const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
+      fetch(base+'/v1/news/fx?tid='+encodeURIComponent(b.getAttribute('data-tid'))+'&_t='+Date.now(),{cache:'no-store'})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(j&&j.ok&&j.fx){ holder.dataset.on='1'; holder.textContent=j.fx; b.textContent='收起附件正文'; }
+          else { b.textContent='附件正文读取失败'; }
+        })
+        .catch(function(){ b.textContent='附件正文读取失败'; });
+    };
+  });
+  /* 图片失效（签名过期 / 被删）→ 给一个明确占位，而不是显示破图图标 */
+  box.querySelectorAll('.nimg img').forEach(function(im){
+    im.onerror=function(){ im.parentNode.classList.add('bad'); };
+  });
+}
+/* 接线：进页签由 onTabActivate 触发；这里只管「显示范围」与「⟳ 刷新」 */
+(function(){
+  const sel=document.getElementById('newsRange'), go=document.getElementById('newsGo');
+  if(sel) sel.onchange=function(){ newsLoad(1); };
+  if(go) go.onclick=function(){ newsLoad(1); };
+})();
+
 function onTabActivate(tab){
   if(tab==="chance"){ /* 首次进入先扫一轮（之后交给模块自己的 5 分钟定时器） */
     if(!CHANCE.lastAt&&typeof chanceScan==='function') chanceScan();
@@ -2317,6 +2595,10 @@ function onTabActivate(tab){
   }
   if(tab==="data"){ /* 数据浏览：首次进入自动加载一次（日频数据，无需轮询） */
     if(!DB.last&&typeof dbLoad==='function') dbLoad();
+    return;
+  }
+  if(tab==="news"){ /* 消息面：进页签读一次（内部有 30 秒节流，反复切换不会重复打接口） */
+    if(typeof newsLoad==='function') newsLoad();
     return;
   }
   if(tab==="watch"){ ensureAllSectors().then(()=>{ renderWatchChips(); refreshWatch(); }); }
