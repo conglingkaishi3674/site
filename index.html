@@ -3128,6 +3128,12 @@ document.getElementById("loadStockBtn").onclick=()=>{
 function loadStock(sym, label){
   curStock=sym; curStock.name=label||sym.code; _zoom=null;
   document.getElementById("stockName").textContent=curStock.name+" ("+sym.secid+")";
+  /* 组件还没就绪时给一句可见反馈 —— 否则从别的模块点标的名，会「几秒钟毫无动静」，
+     看着像点了没反应（ensureECharts 就绪后会自动回调、把这幅图画出来，不用再点一次）。 */
+  if(!window.echarts){
+    const st=document.getElementById("klineStatus");
+    if(st) st.textContent='⏳ 正在加载图表组件…（首次约几秒，之后有本地缓存）';
+  }
   ensureECharts(()=>{ if(STOCK_MODE==='rt') refreshRt(); else refreshStock(); });
 }
 /* 从别的模块点标的名 → 跳到「个股盯盘」并画 K 线。
@@ -3418,14 +3424,19 @@ function chanceRender(hit){
   const box=document.getElementById('chanceList'); if(!box) return;
   if(!hit.length){ box.innerHTML='<div class="empty">这一轮没有命中 —— 下一轮自动再扫</div>'; return; }
   box.classList.remove('ck-open');
+  /* 显示用格式化：**任何取不到的值一律显示「—」，绝不显示 NaN**。
+     踩过：all 模式的条目曾经漏了 brk / low 两个键 → 界面上两列直接印出 "NaN"
+     （`(+undefined).toFixed(2)` === 'NaN'）。这类错在渲染层兜住，比在每条数据路径上防更保险。 */
+  const n2=function(v){ return isFinite(+v) ? (+v).toFixed(2) : '—'; };
+  const pc=function(v){ return isFinite(+v) ? ((+v>0?'+':'')+(+v).toFixed(2)+'%') : '—'; };
   box.innerHTML=hit.map(function(r){
     const col=r.chg>0?'#ff6f83':(r.chg<0?'#2bd67b':'#c8ccd3');
     return '<div class="chance-row" data-code="'+ces(r.code)+'" data-nm="'+ces(r.name)+'">'
       +'<span class="cn">'+ces(r.name)+' <span class="cc">'+ces(r.code)+'</span></span>'
-      +'<span>'+(+r.price).toFixed(2)+'</span>'
-      +'<span style="color:'+col+'">'+(r.chg>0?'+':'')+(+r.chg).toFixed(2)+'%</span>'
-      +'<span>'+(+r.brk).toFixed(2)+'</span>'
-      +'<span>'+(+r.low).toFixed(2)+'</span></div>'
+      +'<span>'+n2(r.price)+'</span>'
+      +'<span style="color:'+col+'">'+pc(r.chg)+'</span>'
+      +'<span>'+n2(r.brk)+'</span>'
+      +'<span>'+n2(r.low)+'</span></div>'
       +'<div class="ck-box"></div>';                 /* 每行后面挂一个展开位（默认隐藏） */
   }).join('');
   box.querySelectorAll('.chance-row').forEach(function(el){
@@ -3472,7 +3483,28 @@ async function chanceKlineToggle(row,code,name){
   box.classList.add('on'); row.classList.add('ck-on');
   const list=document.getElementById('chanceList');
   if(list) list.classList.add('ck-open');
-  if(!window.echarts){ box.innerHTML='<div class="ck-hint">ECharts 还没加载好，稍等几秒再点</div>'; return; }
+  /* ECharts 有 1MB，是**懒加载**的（见 ensureECharts）。原来这里在组件还没就绪时**直接把这次点击丢掉**、
+     让用户「稍等几秒再点」—— 点了等于白点，体验很差。
+     现在改成：把这次点击**排进加载队列**，组件一就绪就自动把这一行重新展开。
+     ⚠ 重入前必须把 row.__on 复位，否则会掉进上面的「已展开 → 收起」分支，变成点开又自动收起。 */
+  if(!window.echarts){
+    box.innerHTML='<div class="ck-hint">⏳ 正在加载图表组件…（首次约几秒，之后有本地缓存，很快）</div>';
+    let fired=false;
+    const once=function(){
+      if(fired) return; fired=true;
+      if(!row.__on) return;          /* 排队期间用户又点了一下（收起）→ 尊重他的操作，不再展开 */
+      row.__on=false;                /* 复位：让下面这次调用走「展开」分支而不是「收起」 */
+      chanceKlineToggle(row,code,name);
+    };
+    try{ ensureECharts(once); }catch(e){ once(); }
+    /* 兜底：CDN 全挂时 ensureECharts 不会回调（它把错误写进盯盘状态栏）→ 别让「加载中」永远挂着 */
+    setTimeout(function(){
+      if(fired||window.echarts) return;
+      box.innerHTML='<div class="ck-hint">❌ 图表组件加载失败（需要联网）'
+        +' · 可先打开「个股盯盘」或「选股器」把组件下载下来，再回来点这一行</div>';
+    },14000);
+    return;
+  }
   box.innerHTML='<div class="ck-hint">⏳ 正在取 '+ces(name)+' 的日线…</div>';
   try{
     const stk=mkStock(name,code); if(!stk) throw new Error('代码识别不了');
@@ -4535,7 +4567,11 @@ function chanceAllRaw(days,bars,names,todayMap){
     if(!(yl<pl)) continue;                  // ① 昨日是局部低点
     if(!(th>yh)) continue;                  // ② 顶破那根越过昨日最高
     if(!(tl>yl)) continue;                  // ③ 没把昨日低点刷新掉
-    out.push({code:c, name:names[c]||'', yh:yh, yl:yl,
+    /* ⚠ 必须同时给出 brk / low —— 渲染层（chanceRender）用的就是这两个键名：
+         brk = 顶破价（昨日最高，越过它才算顶破）、low = 昨日低点。
+         自选股 / 选股器那条腿一直是这么给的，**all 模式这边曾经漏了**
+         → 界面上「顶破价 / 昨日低点」两列显示 NaN。键名一律以渲染层为准，别另起名字。 */
+    out.push({code:c, name:names[c]||'', yh:yh, yl:yl, brk:yh, low:yl,
       price:isFinite(tc)?tc:null,
       chg:(isFinite(tc)&&isFinite(yc)&&yc>0)?+((tc/yc-1)*100).toFixed(2):null});
   }
