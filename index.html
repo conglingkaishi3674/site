@@ -4328,7 +4328,10 @@ function lhbRender(j){
     h+='<div class="db-sub">当日席位总览 —— 同一席位在多只标的上的买卖已合并（<b>同一只票上的多笔也合并成一个数</b>）；<b>特殊席位（机构 / 北向 / 游资 / 散户）一律排在一般席位前面</b>，组内按买入金额从多到少；每个席位里的标的按「净买入在前、净卖出在后」排列（红=净买入，绿=净卖出）。共 '+rows.length+' 个席位</div>'
       + rows.map(function(o){
           return '<div class="lhb-item open"><div class="lhb-seat-hd">'
-            +'<div class="nm">'+lhbTag(o)+'<b>'+ces(o.t)+'</b><span class="cd">'+ces(o.seat)+'</span></div>'
+            /* ⚠ 原来是「标签 + 类型名 + 席位名」三块并排，而机构/北向这类三者的值相同
+               → 页面上会连着打出三个「机构专用」（用户截图里能看到）。
+               改成：标签必显；席位名与标签重复时不再重复输出。 */
+            +'<div class="nm">'+lhbTag(o)+(String(o.seat)===String(o.t)?'':'<span class="cd">'+ces(o.seat)+'</span>')+'</div>'
             +'<div class="r">买 '+YI(o.buy)+'</div><div class="r">卖 '+YI(o.sell)+'</div><div class="r">净 '+YIC(o.net)+'</div>'
             +'</div><div class="lhb-seats"><div class="lhb-chips">'
             /* 席位内的标的（2026-09-30 按需求改）：**净买入的一律排在净卖出前面** ——
