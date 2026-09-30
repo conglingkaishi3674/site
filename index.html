@@ -202,8 +202,15 @@
    border-radius:9px;padding:6px 8px;font:inherit;font-size:12px}
  .chance-hint{font-size:11px;color:var(--muted)}
  .chance-wrap{border:1px solid var(--line);border-radius:12px;padding:6px 10px;background:rgba(255,255,255,.02)}
- .chance-head,.chance-row{display:grid;grid-template-columns:1.5fr .8fr .7fr .9fr .9fr;gap:8px;
+ .chance-head,.chance-row{display:grid;grid-template-columns:1.5fr 1.05fr .8fr .7fr .9fr .9fr;gap:8px;
    align-items:center;padding:6px 2px;font-size:13px}
+ /* 表头可点排序（2026-09-30 按需求加）。▾=降序 ▴=升序，默认不动顺序 */
+ .chance-head>span{cursor:pointer;user-select:none;white-space:nowrap}
+ .chance-head>span:hover{color:var(--text)}
+ .chance-head>span.sk{color:var(--gold,#ffcc33)}
+ .chance-head>span.sk::after{content:' ▾';font-size:10px;opacity:.8}
+ .chance-head>span.sk.sa::after{content:' ▴'}
+ .chance-row .cs{color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .chance-head{color:var(--muted);font-size:11px;border-bottom:1px solid var(--line)}
  .chance-row{border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;border-radius:6px}
  .chance-row:hover{background:rgba(255,204,51,.10)}
@@ -812,9 +819,13 @@
      窄屏保留「名称 + 顶破价 + 昨日低点」——**后两个是这个策略的判定依据**
      （顶破价有没有被突破），现价/涨幅是可另查的实时值。隐藏第 2、3 列。
      ⚠ 之前误藏了第 4/5 列（判定依据），已改正。 */
-  .chance-head,.chance-row{grid-template-columns:1.4fr 1fr 1fr;gap:6px;font-size:12px}
-  .chance-head>span:nth-child(2),.chance-head>span:nth-child(3),
-  .chance-row>span:nth-child(2),.chance-row>span:nth-child(3){display:none}
+  /* 新列序：1 名称 / 2 板块 / 3 现价 / 4 涨幅 / 5 顶破价 / 6 昨日低点。
+     窄屏隐藏 2 板块 / 3 现价 / 4 涨幅，保留「名称 + 顶破价 + 昨日低点」——
+     这两列是判定依据，不能藏（之前误藏过一次）。板块是新增的排序辅助，窄屏让位。 */
+  .chance-head,.chance-row{grid-template-columns:1.5fr 1fr 1fr;gap:6px;font-size:12px}
+  .chance-head>span:nth-child(2),.chance-row>span:nth-child(2),
+  .chance-head>span:nth-child(3),.chance-row>span:nth-child(3),
+  .chance-head>span:nth-child(4),.chance-row>span:nth-child(4){display:none}
   .chance-list{max-height:min(60vh,420px)}
   .ck-chart{height:300px}
   .chance-bar{gap:8px}
@@ -1242,7 +1253,7 @@
     <span class="chance-hint" id="chanceHint">—</span>
    </div>
    <div class="chance-wrap">
-    <div class="chance-head"><span>代码 / 名称</span><span>现价</span><span>涨幅</span><span>顶破价</span><span>昨日低点</span></div>
+    <div class="chance-head" id="chanceHead"><span data-ck="name">代码 / 名称</span><span data-ck="sec">板块</span><span data-ck="price">现价</span><span data-ck="chg">涨幅</span><span data-ck="brk">顶破价</span><span data-ck="low">昨日低点</span></div>
     <div class="chance-list" id="chanceList"><div class="empty">点「立即扫描」开始</div></div>
    </div>
    <div class="chance-note">
@@ -3486,7 +3497,10 @@ function setMode(m){
         确认昨日那根真的有 B 类标签。粗筛只是必要条件 —— 包含合并与摆动阈值
         都会让「几何上像」的昨日在图上其实没标记（见 chanceVerify）。
    盘中行情走东财 ulist 批量接口（一次最多 100 只）；收盘后走 Tushare 全市场。 */
-const CHANCE={pool:'watch', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', calDay:'', autoFallback:''};
+/* sortK/sortD：表头点出来的排序（空 = 保持命中顺序）；hits：本轮命中结果（排序重绘用）；
+   secMap：个股代码 → 所属行业（东财 f100），同一轮内复用，避免反复请求。 */
+const CHANCE={pool:'watch', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', calDay:'', autoFallback:'',
+  sortK:'', sortD:-1, hits:[], secMap:{}};
 /* 失败冷却：快照拉取失败后 10 分钟内不再发请求（手动点击也一样）——
    东财限流期间继续打只会把封禁时间越拖越长，也连累同源的其他模块。 */
 const ces=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -3723,25 +3737,84 @@ async function chanceVerify(list,onProg){
   }
   return out;
 }
-function chanceRender(hit){
-  const box=document.getElementById('chanceList'); if(!box) return;
-  if(!hit.length){ box.innerHTML='<div class="empty">这一轮没有命中 —— 下一轮自动再扫</div>'; return; }
-  box.classList.remove('ck-open');
+/* 表头点出来的排序。空值（没板块 / 没涨幅）**一律沉底**，不管正序倒序 ——
+   把一堆「—」顶到第一位毫无意义（与板块表 secSortRows 同一套规则）。 */
+function chanceSortRows(list){
+  const k=CHANCE.sortK, d=CHANCE.sortD;
+  if(!k) return list.slice();
+  return list.slice().sort(function(a,b){
+    if(k==='sec'){
+      const va=String(a.sec||''), vb=String(b.sec||'');
+      if(!va&&!vb) return 0;
+      if(!va) return 1;
+      if(!vb) return -1;
+      return va.localeCompare(vb,'zh')*d;
+    }
+    const va=a[k], vb=b[k];
+    const na=(va==null||va===''||!isFinite(+va)), nb=(vb==null||vb===''||!isFinite(+vb));
+    if(na&&nb) return 0;
+    if(na) return 1;
+    if(nb) return -1;
+    return (+va-+vb)*d;
+  });
+}
+function chanceHeadMark(){
+  const hd=document.getElementById('chanceHead'); if(!hd) return;
+  [].slice.call(hd.children||[]).forEach(function(sp){
+    const on=(sp.getAttribute('data-ck')===CHANCE.sortK);
+    sp.classList.toggle('sk', on);
+    sp.classList.toggle('sa', on && CHANCE.sortD>0);
+  });
+}
+function chanceRowHTML(r){
   /* 显示用格式化：**任何取不到的值一律显示「—」，绝不显示 NaN**。
      踩过：all 模式的条目曾经漏了 brk / low 两个键 → 界面上两列直接印出 "NaN"
      （`(+undefined).toFixed(2)` === 'NaN'）。这类错在渲染层兜住，比在每条数据路径上防更保险。 */
   const n2=function(v){ return isFinite(+v) ? (+v).toFixed(2) : '—'; };
-  const pc=function(v){ return isFinite(+v) ? ((+v>0?'+':'')+(+v).toFixed(2)+'%') : '—'; };
-  box.innerHTML=hit.map(function(r){
-    const col=r.chg>0?'#ff6f83':(r.chg<0?'#2bd67b':'#c8ccd3');
-    return '<div class="chance-row" data-code="'+ces(r.code)+'" data-nm="'+ces(r.name)+'">'
-      +'<span class="cn">'+ces(r.name)+' <span class="cc">'+ces(r.code)+'</span></span>'
-      +'<span>'+n2(r.price)+'</span>'
-      +'<span style="color:'+col+'">'+pc(r.chg)+'</span>'
-      +'<span>'+n2(r.brk)+'</span>'
-      +'<span>'+n2(r.low)+'</span></div>'
-      +'<div class="ck-box"></div>';                 /* 每行后面挂一个展开位（默认隐藏） */
-  }).join('');
+  const pcf=function(v){ return isFinite(+v) ? ((+v>0?'+':'')+(+v).toFixed(2)+'%') : '—'; };
+  const col=r.chg>0?'#ff6f83':(r.chg<0?'#2bd67b':'#c8ccd3');
+  return '<div class="chance-row" data-code="'+ces(r.code)+'" data-nm="'+ces(r.name)+'">'
+    +'<span class="cn">'+ces(r.name)+' <span class="cc">'+ces(r.code)+'</span></span>'
+    +'<span class="cs">'+ces(r.sec||'—')+'</span>'
+    +'<span>'+n2(r.price)+'</span>'
+    +'<span style="color:'+col+'">'+pcf(r.chg)+'</span>'
+    +'<span>'+n2(r.brk)+'</span>'
+    +'<span>'+n2(r.low)+'</span></div>'
+    +'<div class="ck-box"></div>';                 /* 每行后面挂一个展开位（默认隐藏） */
+}
+/* 给命中列表补「所属行业」：东财 ulist 的 f100，一次最多传 100 只。
+   ⚠ 只对**命中的股票**查，不做全市场映射（全市场要 50 多个请求，没必要）。
+   ⚠ 失败一律不影响结果 —— 板块只是排序辅助，拿不到就显示「—」。 */
+async function chanceFillSector(list){
+  const need=list.filter(function(r){ return !r.sec && CHANCE.secMap[r.code]==null; });
+  if(!need.length) return false;
+  let got=false;
+  for(let i=0;i<need.length;i+=100){
+    const chunk=need.slice(i,i+100);
+    const ids=chunk.map(function(r){ const s=splitSymbol(r.code); return s?s.secid:null; }).filter(Boolean);
+    if(!ids.length) continue;
+    const q='/api/qt/ulist.np/get?secids='+ids.join(',')+'&fields=f12,f100&fltt=2&invt=2';
+    let d=null;
+    for(let k=0;k<CFG.hosts.length;k++){
+      try{ d=await jsonp(CFG.hosts[(CFG.hostIdx+k)%CFG.hosts.length]+q); break; }catch(e){}
+    }
+    const diff=(d&&d.data&&d.data.diff)||null;
+    if(!diff) continue;                            /* 这批失败 → 留空，不做重试（下一轮扫描自然会再补） */
+    diff.forEach(function(x){ CHANCE.secMap[String(x.f12)]=String(x.f100||''); });
+    got=true;
+  }
+  if(got) list.forEach(function(r){
+    if(!r.sec && CHANCE.secMap[r.code]!=null) r.sec=CHANCE.secMap[r.code]||'—';
+  });
+  return got;
+}
+/* 按当前排序重绘（排序是纯前端重排，**不会重新扫描**） */
+function chancePaint(){
+  const box=document.getElementById('chanceList'); if(!box) return;
+  const hit=CHANCE.hits||[];
+  if(!hit.length) return;
+  box.classList.remove('ck-open');
+  box.innerHTML=chanceSortRows(hit).map(chanceRowHTML).join('');
   box.querySelectorAll('.chance-row').forEach(function(el){
     el.__box=el.nextElementSibling;                   /* 紧跟其后的 .ck-box */
     el.onclick=function(){
@@ -3752,6 +3825,18 @@ function chanceRender(hit){
       chanceKlineToggle(el, c, nm);
     };
   });
+  chanceHeadMark();
+}
+function chanceRender(hit){
+  const box=document.getElementById('chanceList'); if(!box) return;
+  if(!hit||!hit.length){ box.innerHTML='<div class="empty">这一轮没有命中 —— 下一轮自动再扫</div>'; return; }
+  CHANCE.hits=hit.slice();
+  chancePaint();                                   /* 先出结果，不等板块 */
+  /* 板块异步补：拿到就重绘一次；拿不到就算了（排「板块」时空值会沉底显示「—」）。
+     包 try 是因为这函数在多个调用点被 await 链路间接调用，别让一个附属信息把主流程带崩。 */
+  try{
+    chanceFillSector(CHANCE.hits).then(function(got){ if(got) chancePaint(); }).catch(function(){});
+  }catch(e){}
 }
 /* ============ 今日机会：点行就地展开 K 线，再点收起 ============
    为什么不直接复用盯盘的 renderKline：那个函数把 `#klineChart` 和全局单例 `_klineInst`
@@ -4010,7 +4095,10 @@ function chanceAuto(){
      ② 多空是「双增/双减/单边」——双增=分歧加大有新资金进场，双减=资金离场分歧减弱。
      ③ 头部席位（中信、国君、华泰等）单日大幅增减仓，往往比小席位更能说明问题。
    ⚠ 席位是该期货公司**全部客户的合并持仓**，不能直接读成「某家机构看空」。 */
-const DB={product:'IM', date:'', contract:'', busy:false, tab:'ccpm', view:'stock'};
+/* gen：加载代次。切页签时 +1，让**在途的旧请求**作废 —— 否则会出现
+   「不等股指刷新完就点板块数据 → 旧响应回来把股指数据画到板块页签上」
+   （2026-09-30 用户报的 bug）。每个 await 之后都要比对 gen，不一致就丢弃结果。 */
+const DB={product:'IM', date:'', contract:'', busy:false, tab:'ccpm', view:'stock', gen:0};
 function dbBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
 function dbToday(){ const d=new Date();
   return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
@@ -4182,13 +4270,22 @@ function lhbSeatRows(list){
   const m={};
   list.forEach(function(s){
     (s.seats||[]).forEach(function(x){
-      const o=m[x.seat]||(m[x.seat]={seat:x.seat,stocks:[],buy:0,sell:0,net:0});
-      o.stocks.push({name:s.name,net:x.net,buy:x.buy||0,sell:x.sell||0});   /* 存买卖额：筹码块要按买入额排 */
+      const o=m[x.seat]||(m[x.seat]={seat:x.seat,stocks:[],byCode:{},buy:0,sell:0,net:0});
+      /* ⚠ 同一席位在**同一只标的**上的多条记录必须合并累加，不能各占一个筹码块 ——
+         例如「机构专用」三笔都在买鸿富诚，那是同一个席位对同一只票的合计动作，
+         拆成三个块既啰嗦又误导（2026-09-30 按需求改）。 */
+      const z=o.byCode[s.code]||(o.byCode[s.code]={name:s.name,net:0,buy:0,sell:0});
+      z.buy+=x.buy||0; z.sell+=x.sell||0; z.net+=x.net||0;
       o.buy+=x.buy; o.sell+=x.sell; o.net+=x.net;
     });
   });
   const out=[];
-  for(const k in m){ const o=m[k], i=lhbSeatInfo(o.seat); o.k=i.k; o.t=i.t; out.push(o); }
+  for(const k in m){
+    const o=m[k], i=lhbSeatInfo(o.seat);
+    o.k=i.k; o.t=i.t;
+    o.stocks=Object.keys(o.byCode).map(function(c){ return o.byCode[c]; });
+    out.push(o);
+  }
   out.sort(lhbSort);
   return out;
 }
@@ -4218,18 +4315,30 @@ function lhbRender(j){
        净额会把「大买 + 大卖」相抵成接近 0，成交额又把卖出混了进来，两个都不适合当排序键。
        注：只改这里。个股展开的买五/卖五仍按老规则（特殊席位优先 → 成交额降序），
        那是「看重点」的场景，跟这里的「排座次」不是一回事。 */
-    const rows=lhbSeatRows(list).sort(function(a,b){ return (+b.buy||0)-(+a.buy||0); });
-    h+='<div class="db-sub">当日席位总览 —— 同一席位在多只标的上的买卖已合并，<b>席位、席位里的标的都按买入金额从多到少</b>；每行列出它当天动过的每只标的（红=净买入，绿=净卖出）。共 '+rows.length+' 个席位</div>'
+    /* 排序（2026-09-30 按需求改）：**特殊席位一律压在一般营业部上面** ——
+       机构 / 北向 / 游资 / 拉萨散户，哪怕某个游资席位当天是净卖出，
+       也要排在一般席位净买入的前面；组内再按买入额降序。
+       ⚠ 这里必须自己排一遍：lhbSeatRows 内部那个 lhbSort 用的是「成交额」，
+         而这个视图的口径是「买入额」，两个不一样。 */
+    const rows=lhbSeatRows(list).sort(function(a,b){
+      const ka=(LHB_K_ORDER[a.k]==null?9:LHB_K_ORDER[a.k]), kb=(LHB_K_ORDER[b.k]==null?9:LHB_K_ORDER[b.k]);
+      if(ka!==kb) return ka-kb;
+      return (+b.buy||0)-(+a.buy||0);
+    });
+    h+='<div class="db-sub">当日席位总览 —— 同一席位在多只标的上的买卖已合并（<b>同一只票上的多笔也合并成一个数</b>）；<b>特殊席位（机构 / 北向 / 游资 / 散户）一律排在一般席位前面</b>，组内按买入金额从多到少；每个席位里的标的按「净买入在前、净卖出在后」排列（红=净买入，绿=净卖出）。共 '+rows.length+' 个席位</div>'
       + rows.map(function(o){
           return '<div class="lhb-item open"><div class="lhb-seat-hd">'
             +'<div class="nm">'+lhbTag(o)+'<b>'+ces(o.t)+'</b><span class="cd">'+ces(o.seat)+'</span></div>'
             +'<div class="r">买 '+YI(o.buy)+'</div><div class="r">卖 '+YI(o.sell)+'</div><div class="r">净 '+YIC(o.net)+'</div>'
             +'</div><div class="lhb-seats"><div class="lhb-chips">'
-            /* 席位内的标的也按**买入额**降序（2026-09-23 按需求改）：跟席位本身同一套口径 ——
-               这个视图回答的是「这个席位买得最多的是哪几只」。买入额打平再比净额绝对值，保证顺序稳定。
+            /* 席位内的标的（2026-09-30 按需求改）：**净买入的一律排在净卖出前面** ——
+               之前只按买入额排，于是「买 1 亿 / 卖 3 亿」这种净卖出票会挤在净买入中间。
+               组内：净买入按买入额降序、净卖出按卖出额降序。
                （牌子上的数字仍显示净额：红=净买入、绿=净卖出，那是方向，跟排序键是两回事。） */
             + o.stocks.slice().sort(function(a,b){
-                return ((+b.buy||0)-(+a.buy||0)) || (Math.abs(b.net)-Math.abs(a.net));
+                const da=((+a.net||0)>=0)?0:1, db=((+b.net||0)>=0)?0:1;
+                if(da!==db) return da-db;
+                return da===0 ? ((+b.buy||0)-(+a.buy||0)) : ((+b.sell||0)-(+a.sell||0));
               }).map(function(x){
                 return '<span class="lhb-chip">'+ces(x.name)+' <span class="'+FCLS(x.net)+'">'+(x.net>0?'+':'')+YI(x.net)+'</span></span>';
               }).join('')
@@ -4322,11 +4431,18 @@ async function dbFetchOne(d){
    ⚠ 必须**按方向搜**：早先只有一个「往前找」的循环，于是从周五点「下一日」时
      会先试周六（无文件）再退回周五 —— 表现就是「按钮点了没反应」。 */
 async function dbLoad(dir){
-  if(DB.busy) return; DB.busy=true;
+  /* ⚠ 换页签时会**先把 DB.busy 置回 false、再把 DB.gen +1**（见页签点击处）——
+     所以这里的 busy 只用来挡「同一页签内的重复点击」，不会把新页签的加载卡死。
+     在途的旧请求醒来时 gen 已经变了 → 结果全部丢弃，不会再画到新页签上。
+     （2026-09-30 用户报的 bug：不等股指刷新完就点板块数据，旧响应回来把股指数据
+       画到了板块页签上 —— 就是因为旧请求只认进入时的 tab，渲染时不再校验。） */
+  if(DB.busy) return;
+  DB.busy=true;
+  const gen=++DB.gen;
   dir=dir||0;
   /* 大盘数据是「整段快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 走独立路径 */
-  if(DB.tab==='mkt'){ await dbLoadMkt(); DB.busy=false; return; }
-  if(DB.tab==='sector'){ await dbLoadSector(); DB.busy=false; return; }
+  if(DB.tab==='mkt'){ await dbLoadMkt(gen); if(gen===DB.gen) DB.busy=false; return; }
+  if(DB.tab==='sector'){ await dbLoadSector(gen); if(gen===DB.gen) DB.busy=false; return; }
   const hint=document.getElementById('dbHint'), box=document.getElementById('dbBody');
   const sel=document.getElementById('dbProduct'); if(sel) DB.product=sel.value;
   const today=dbToday();
@@ -4334,12 +4450,13 @@ async function dbLoad(dir){
     if(hint) hint.textContent='取数中…';
     let d=(DB.date&&dir)?dbShift(DB.date,dir):today;
     if(!DB.date) dir=-1;                                   // 没有基准日：一律往前找
-    if(dir>0&&d>today){ if(hint) hint.textContent='已是最新交易日（'+dbPretty(DB.date)+'）'; DB.busy=false; return; }
+    if(dir>0&&d>today){ if(hint) hint.textContent='已是最新交易日（'+dbPretty(DB.date)+'）'; if(gen===DB.gen) DB.busy=false; return; }
     const step=dir>0?1:-1;
     let j=null, n=0, part=null;
     while(n<10){                                           // 最多试 10 天，跨周末/短假都够
       if(step>0&&d>today) break;                           // 不往未来翻
       const r=await dbFetchOne(d);
+      if(gen!==DB.gen) return;                             // 期间切了页签 → 立刻停手
       /* 半成品（席位明细还没出完）先记下、继续往前找完整的那天 ——
          但要是 10 天里只有半成品，就把最近那份摆出来（下面的提示条会说明）。 */
       if(r){ if(!r.__partial){ j=r; break; } if(!part) part=r; }
@@ -4349,7 +4466,7 @@ async function dbLoad(dir){
     if(!j){
       if(step<0) box.innerHTML='<div class="empty">往前找了 10 天都没取到（可能还没发布，或不是交易日）</div>';
       if(hint) hint.textContent=step>0?'往后找了 10 天也没有数据':'取数失败';
-      DB.busy=false; return;
+      if(gen===DB.gen) DB.busy=false; return;
     }
     DB.date=j.date; DB.last=j;
     const el=document.getElementById('dbDate'); if(el) el.value=dbPretty(j.date);
@@ -4359,8 +4476,8 @@ async function dbLoad(dir){
          + (j.__partial ? ('（席位明细只到 '+j.seatStocks+'/'+j.n+' 只，还没公布完）')
                         : ('（数据源：'+(j.src==='em'?'东方财富':'Tushare')+'）')))
       : ('已加载 '+j.product+' · '+dbPretty(j.date)+'（数据来自中金所）');
-  }catch(e){ if(hint) hint.textContent='加载失败：'+((e&&e.message)||'网络不通'); }
-  DB.busy=false;
+  }catch(e){ if(gen===DB.gen && hint) hint.textContent='加载失败：'+((e&&e.message)||'网络不通'); }
+  if(gen===DB.gen) DB.busy=false;
 }
 /* ============ 大盘数据（数据浏览第三个页签）============
    数据来自 Worker 的 /v1/mkt/overview（Tushare 盘后口径），一次拿回四块：
@@ -4372,7 +4489,8 @@ async function dbLoad(dir){
      · 资金分档是**全市场**口径，**不是北向的** —— 北向没有「大单流入流出」这种数据；
      · 北向/南向给的是**成交额**（买+卖），不是净买入，别当方向读。 */
 let _mktInst1=null, _mktInst2=null;
-async function dbLoadMkt(){
+async function dbLoadMkt(gen){
+  if(gen==null) gen=DB.gen;   /* 兜底：漏传代次的调用点按「当前代次」处理，而不是当成过期丢掉 */
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
   if(hint) hint.textContent='取数中…';
   if(box) box.innerHTML='<div class="empty">加载中…（近一年成交额 + 当日快照，首次约几秒）</div>';
@@ -4380,11 +4498,13 @@ async function dbLoadMkt(){
     const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
     const r=await fetch(base+'/v1/mkt/overview',{cache:'no-store'});
     const j=await r.json();
+    if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果，不渲染 */
     if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
     DB.date=j.last; DB.last=j;
     mktRender(j);
     if(hint) hint.textContent='已加载 大盘数据 · '+dbPretty(j.last)+' · 近一年 '+(j.turnover||[]).length+' 个交易日（Tushare 盘后口径）';
   }catch(e){
+    if(gen!==DB.gen) return;
     if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
     if(hint) hint.textContent='加载失败';
   }
@@ -4426,7 +4546,8 @@ function secSortRows(list){
     return (+va-+vb)*d;
   });
 }
-async function dbLoadSector(){
+async function dbLoadSector(gen){
+  if(gen==null) gen=DB.gen;   /* 兜底：板块参数变更处是直接调 dbLoadSector()，不传代次 */
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
   if(hint) hint.textContent='取数中…';
   if(box) box.innerHTML='<div class="empty">加载中…（拉近 11 个交易日的板块成交额 + 当日资金流，首次约 6 秒）</div>';
@@ -4434,10 +4555,12 @@ async function dbLoadSector(){
     const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
     const r=await fetch(base+'/v1/sector/overview?min='+encodeURIComponent(_secState.min),{cache:'no-store'});
     const j=await r.json();
+    if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果，不渲染 */
     if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
     DB.last=j; sectorRender(j);
     if(hint) hint.textContent='已加载 板块数据 · '+dbPretty(j.last)+' · '+j.total+' 个板块（已剔除成分股 < '+j.minStocks+' 的与统计篮子）';
   }catch(e){
+    if(gen!==DB.gen) return;
     if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
     if(hint) hint.textContent='加载失败';
   }
@@ -4979,6 +5102,22 @@ async function chanceScanAll(){
   const go=document.getElementById('chanceGo'); if(go) go.onclick=function(){ chanceScan(); };
   const pl=document.getElementById('chancePool');
   if(pl) pl.onchange=function(){ CHANCE.pool=this.value; chanceScan(); };
+  /* 表头点排序（2026-09-30 按需求加）：换列时数字默认降序、文字默认升序；同列再点反向。
+     排序只重排**已有的命中结果**，不会重新扫描（扫描很贵，也不该被一次点击触发）。
+     ⚠ 整段包 try：排序是附属功能，绝不能因为一次 DOM 取不到就把下面的 chanceAuto() 打断。 */
+  try{
+    const hd=document.getElementById('chanceHead');
+    if(hd){
+      [].slice.call(hd.children||[]).forEach(function(sp){
+        sp.onclick=function(){
+          const k=sp.getAttribute('data-ck'); if(!k) return;
+          if(CHANCE.sortK===k) CHANCE.sortD=-CHANCE.sortD;
+          else { CHANCE.sortK=k; CHANCE.sortD=(k==='name'||k==='sec')?1:-1; }
+          chancePaint();
+        };
+      });
+    }
+  }catch(e){}
   chanceAuto();
 })();
 /* 数据浏览：按钮接线（首次加载由 onTabActivate 触发） */
@@ -4998,6 +5137,12 @@ async function chanceScanAll(){
       const t=this.getAttribute('data-db');
       if(DB.tab===t) return;
       DB.tab=t; DB.date=''; DB.last=null; DB.contract='';
+      /* ⚠ 释放锁 + 递增代次，让上一页签**在途的请求作废**：
+         否则它回来时仍会 dbRender，把旧数据画到这个新页签上
+         （2026-09-30 用户报：「不等股指刷新完就点板块数据，显示的是股指数据」）。
+         busy 必须先置 false —— 不然下面这次 dbLoad 会被上一页签的锁挡掉，
+         页面就永远停在「加载中…」。 */
+      DB.busy=false; DB.gen++;
       tabs.forEach(function(x){ x.classList.toggle('on', x===b); });
       const isLhb=(t==='lhb'), isMkt=(t==='mkt'), isSec=(t==='sector');
       const pw=document.getElementById('dbProductWrap'); if(pw) pw.style.display=(isLhb||isMkt||isSec)?'none':'';
