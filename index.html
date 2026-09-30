@@ -3498,9 +3498,10 @@ function setMode(m){
         都会让「几何上像」的昨日在图上其实没标记（见 chanceVerify）。
    盘中行情走东财 ulist 批量接口（一次最多 100 只）；收盘后走 Tushare 全市场。 */
 /* sortK/sortD：表头点出来的排序（空 = 保持命中顺序）；hits：本轮命中结果（排序重绘用）；
-   secMap：个股代码 → 所属行业（东财 f100），同一轮内复用，避免反复请求。 */
+   secMap：个股代码 → 所属行业（东财 f100），同一轮内复用，避免反复请求；
+   lastAct：用户在列表上最后一次滚动/点击的时间 —— 自动刷新据此避让（见 chanceBusyLooking）。 */
 const CHANCE={pool:'watch', prev:{}, items:[], lastAt:0, busy:false, timer:null, cool:0, lastDay:'', calDay:'', autoFallback:'',
-  sortK:'', sortD:-1, hits:[], secMap:{}};
+  sortK:'', sortD:-1, hits:[], secMap:{}, lastAct:0};
 /* 失败冷却：快照拉取失败后 10 分钟内不再发请求（手动点击也一样）——
    东财限流期间继续打只会把封禁时间越拖越长，也连累同源的其他模块。 */
 const ces=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -3786,9 +3787,19 @@ function chanceRowHTML(r){
    ⚠ 只对**命中的股票**查，不做全市场映射（全市场要 50 多个请求，没必要）。
    ⚠ 失败一律不影响结果 —— 板块只是排序辅助，拿不到就显示「—」。 */
 async function chanceFillSector(list){
-  const need=list.filter(function(r){ return !r.sec && CHANCE.secMap[r.code]==null; });
-  if(!need.length) return false;
-  let got=false;
+  if(!list||!list.length) return false;
+  let changed=false;
+  /* ① 先用缓存里的映射直接补 —— **这一步是关键**。
+     自动刷新每 5 分钟一轮，第二轮以后 secMap 里早就存着这些代码了；
+     原来写成「need = 还没有映射的」，于是 need 为空 → 函数当场 return false
+     → 新一轮结果一行板块都补不上（2026-09-30 用户报「自动刷新后板块分类全没了」）。
+     缓存就该在这里被用上：**「有新结果要补」和「要发请求」是两件事**，不能混为一谈。 */
+  list.forEach(function(r){
+    if(!r.sec && CHANCE.secMap[r.code]!=null){ r.sec=CHANCE.secMap[r.code]||'—'; changed=true; }
+  });
+  /* ② 缓存里也没有的，才发请求（一次最多 100 只） */
+  const need=list.filter(function(r){ return !r.sec; });
+  if(!need.length) return changed;
   for(let i=0;i<need.length;i+=100){
     const chunk=need.slice(i,i+100);
     const ids=chunk.map(function(r){ const s=splitSymbol(r.code); return s?s.secid:null; }).filter(Boolean);
@@ -3799,14 +3810,13 @@ async function chanceFillSector(list){
       try{ d=await jsonp(CFG.hosts[(CFG.hostIdx+k)%CFG.hosts.length]+q); break; }catch(e){}
     }
     const diff=(d&&d.data&&d.data.diff)||null;
-    if(!diff) continue;                            /* 这批失败 → 留空，不做重试（下一轮扫描自然会再补） */
+    if(!diff) continue;                            /* 这批失败 → 留空，下一轮扫描自然会再补 */
     diff.forEach(function(x){ CHANCE.secMap[String(x.f12)]=String(x.f100||''); });
-    got=true;
+    chunk.forEach(function(r){
+      if(!r.sec && CHANCE.secMap[r.code]!=null){ r.sec=CHANCE.secMap[r.code]||'—'; changed=true; }
+    });
   }
-  if(got) list.forEach(function(r){
-    if(!r.sec && CHANCE.secMap[r.code]!=null) r.sec=CHANCE.secMap[r.code]||'—';
-  });
-  return got;
+  return changed;
 }
 /* 按当前排序重绘（排序是纯前端重排，**不会重新扫描**） */
 function chancePaint(){
@@ -4074,13 +4084,25 @@ async function chanceScan(){
   }catch(e){ if(hint) hint.textContent='扫描失败：'+((e&&e.message)||'网络不通'); }
   CHANCE.busy=false;
 }
-/* 仅交易时段（9:30-11:30 / 13:00-15:00）且正停在本模块时才自动扫 */
+/* 「用户正在看」的判据（2026-09-30 按需求加）：
+   ① 最近 2 分钟内在列表上滚动/点击过 → 他在看；
+   ② 有展开的 K 线盒 → 他正在看图。
+   任一条成立就跳过这一轮自动刷新 —— 不在他眼皮底下把列表换掉。
+   （刷新本身已经不会再丢板块：chanceFillSector 会先用缓存补上；但「正看着列表突然重排」
+     这件事本身就够烦人。） */
+function chanceBusyLooking(){
+  if(Date.now()-(CHANCE.lastAct||0)<120000) return true;
+  const list=document.getElementById('chanceList');
+  return !!(list&&list.querySelector&&list.querySelector('.chance-row.ck-on'));
+}
+/* 仅交易时段（9:30-11:30 / 13:00-15:00）、正停在本模块、**且用户没在看**时才自动扫 */
 function chanceAuto(){
   clearInterval(CHANCE.timer);
   CHANCE.timer=setInterval(function(){
     if(typeof activeTab==='function'&&activeTab()!=='chance') return;
     const d=new Date(), m=d.getHours()*60+d.getMinutes();
     if(!((m>=570&&m<=690)||(m>=780&&m<=900))) return;
+    if(chanceBusyLooking()) return;              /* 正在看 → 这一轮不刷，下一轮再看 */
     chanceScan();
   },CHANCE.pool==='all'?600000:300000);
 }
@@ -5118,6 +5140,16 @@ async function chanceScanAll(){
           else { CHANCE.sortK=k; CHANCE.sortD=(k==='name'||k==='sec')?1:-1; }
           chancePaint();
         };
+      });
+    }
+  }catch(e){}
+  /* 记录「用户刚在列表上操作过」——自动刷新据此避让（见 chanceBusyLooking）。
+     passive:true 是为了滚动不掉帧，这里不需要 preventDefault。 */
+  try{
+    const cl=document.getElementById('chanceList');
+    if(cl&&cl.addEventListener){
+      ['click','scroll','touchstart','wheel','pointerdown'].forEach(function(ev){
+        cl.addEventListener(ev,function(){ CHANCE.lastAct=Date.now(); },{passive:true});
       });
     }
   }catch(e){}
