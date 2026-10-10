@@ -1306,6 +1306,8 @@
     <button data-db="lhb">龙虎榜 · 席位</button>
     <button data-db="mkt">大盘数据</button>
     <button data-db="sector">板块数据</button>
+    <button data-db="national">国家队动向</button>
+    <button data-db="etf">ETF 申赎</button>
    </div>
 
    <div class="db-toolbar">
@@ -1342,6 +1344,18 @@
    <div class="db-note" id="dbNoteMkt" style="display:none">
     <b>怎么读这份数据：</b>四块 —— ①<b>两市成交额</b>（沪市 + 深市，近一年）：看当前量能处在什么位置、是放量还是缩量；②<b>大盘资金流</b>：把全市场成交拆成 超大单 / 大单 / 中单 / 小单 四档净额，<b>超大单 + 大单 = 主力净额</b>，看的是"谁在买、谁在卖"；③<b>北向 / 南向</b>：沪深港通双向的成交额；④<b>当日成交额前 50</b>：钱最集中在哪里。<br>
     ⚠ 三个口径上的实话：① 资金分档是<b>全市场</b>口径，<b>不是北向的</b> —— 北向资金根本没有「大单流入流出」这个数据，沪深港通自始至终只披露成交额与持股，从不提供 L2 级大单拆分，2024-08 起连实时净买入都取消了；② 北向 / 南向给的是<b>成交额</b>（买 + 卖 合计），<b>不是净买入</b>，别当方向读；③ <b>南向个股成交榜拿不到</b> —— 数据源未购买该接口权限，连前十都取不到，所以南向只做总量、不做个股榜。
+   </div>
+
+   <div class="db-note" id="dbNoteNational" style="display:none">
+    <b>怎么读这份数据：</b>汇金系（国家队）的调仓 <b>80% 以上走 ETF</b>，而 ETF 的份额每天更新 —— 所以<b>份额变动就是最直接的跟踪信号</b>：<b>份额增加 = 净申购 = 增持</b>，<b>份额减少 = 净赎回 = 减持</b>（场内买卖不改变份额，只有一级市场申赎才改）。<br>
+    按宽基类别（上证50 / 沪深300 / 中证500 / 中证1000 / 创业板 / 科创板 / 双创50 / 金融）汇总当日净申赎；<b>点类别行可展开</b>看该类下每一只 ETF 的明细。<br>
+    ⚠ 三个实话：① 份额变动是<b>全体投资者的合力</b>，没法 100% 归因到某一家机构 —— 但汇金系在头部宽基 ETF 上的持有占比极高（部分产品超过 80%），所以<b>大额变动基本由它主导</b>；② 同时给出 <b>5 日 / 20 日累计</b>，单日噪声大、看趋势更准；③ 数据源 Choice，<b>日频、盘后更新</b>（份额通常 15:30 后才入库），所以当天看到的是<b>最近一个交易日</b>的结果。
+   </div>
+
+   <div class="db-note" id="dbNoteEtf" style="display:none">
+    <b>怎么读这份数据：</b>按行业看 ETF 的申赎 —— <b>份额变动 = 净申赎</b>，金额 = 份额变动 × 净值。<b>净申购</b>说明有资金借道 ETF 进场（看多该行业），<b>净赎回</b>相反。<br>
+    它和「板块资金流」是两回事：板块资金流看的是<b>二级市场成交</b>里谁在主动买卖（交易行为），ETF 申赎看的是<b>一级市场的份额增减</b>（真金白银的申购 / 赎回），后者更能反映中期配置意图。<br>
+    ⚠ 数据源 Choice，日频、盘后更新；每行汇总了该行业下若干只主流 ETF（见「ETF 数」列），<b>不是全部 ETF</b>，但覆盖了规模最大的那几只。表头可点排序。
    </div>
   </section>
 
@@ -4796,6 +4810,8 @@ async function dbLoad(dir){
   /* 大盘数据是「整段快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 走独立路径 */
   if(DB.tab==='mkt'){ await dbLoadMkt(gen); if(gen===DB.gen) DB.busy=false; return; }
   if(DB.tab==='sector'){ await dbLoadSector(gen); if(gen===DB.gen) DB.busy=false; return; }
+  if(DB.tab==='national'){ await dbLoadNational(gen); if(gen===DB.gen) DB.busy=false; return; }
+  if(DB.tab==='etf'){ await dbLoadEtf(gen); if(gen===DB.gen) DB.busy=false; return; }
   const hint=document.getElementById('dbHint'), box=document.getElementById('dbBody');
   const sel=document.getElementById('dbProduct'); if(sel) DB.product=sel.value;
   const today=dbToday();
@@ -4861,6 +4877,190 @@ async function dbLoadMkt(gen){
     if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
     if(hint) hint.textContent='加载失败';
   }
+}
+/* ============ 国家队动向 / ETF 申赎（数据浏览第 5、6 个页签）============
+   数据来自云服务器的 Choice 快照（_snapshot_etf.py，cron 工作日盘后每 20 分钟一轮）：
+     /v1/choice/snapshot/national  宽基 ETF 份额变动（国家队跟踪）
+     /v1/choice/snapshot/etf       行业 ETF 申赎
+   口径：份额变动 = 净申赎（场内买卖不改份额）；金额 ≈ 份额变动 × 当日净值。
+   ⚠ 快照里单位是「份 / 元」，界面统一显示成「亿份 / 亿元」。
+   ⚠ 这两个页签是「整段快照」，没有逐日翻页 —— 日期导航会被收起。 */
+const _natState={sk:'money',sd:-1,open:{}};
+const _etfState={sk:'money',sd:-1};
+function snapBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
+/* 带符号的「亿元」：快照里是元，这里 /1e8 */
+function sgnBn(v){ return (v==null||isNaN(v))?'—':((+v>=0?'+':'')+((+v)/1e8).toFixed(2)); }
+/* 排序：数字列按值、名称列按拼音；**空值一律沉底**（跟板块表同一套规则） */
+function snapSort(list,st,nameKey){
+  const k=st.sk,d=st.sd;
+  return list.slice().sort(function(a,b){
+    if(k==='name') return String(a[nameKey]||'').localeCompare(String(b[nameKey]||''),'zh')*d;
+    const va=a[k],vb=b[k];
+    const na=(va==null||va===''||isNaN(va)),nb=(vb==null||vb===''||isNaN(vb));
+    if(na&&nb) return 0;
+    if(na) return 1;
+    if(nb) return -1;
+    return (+va-+vb)*d;
+  });
+}
+/* 可排序表头：表头 / 排序 / 单元格共用同一份列序（散着写必漏列） */
+function snapTh(st,cols){
+  return cols.map(function(c){
+    if(!c.k) return '<th class="'+(c.lft?'lft':'')+'">'+c.t+'</th>';
+    const on=(st.sk===c.k);
+    return '<th class="srt'+(c.lft?' lft':'')+(on?' on':'')+'" data-nk="'+c.k+'" title="点击排序">'
+      +c.t+'<span class="ar">'+(on?(st.sd<0?'▼':'▲'):'⇅')+'</span></th>';
+  }).join('');
+}
+function snapBindTh(box,st,redraw){
+  box.querySelectorAll('th.srt').forEach(function(th){
+    th.onclick=function(){
+      const k=th.getAttribute('data-nk');
+      if(st.sk===k) st.sd=-st.sd;
+      else { st.sk=k; st.sd=(k==='name')?1:-1; }
+      redraw();
+    };
+  });
+}
+async function dbLoadNational(gen){
+  if(gen==null) gen=DB.gen;
+  const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
+  if(hint) hint.textContent='取数中…';
+  if(box) box.innerHTML='<div class="empty">加载中…（读 Choice 盘后快照）</div>';
+  try{
+    const r=await fetchT(snapBase()+'/v1/choice/snapshot/national?t='+Date.now(),12000);
+    const j=await r.json();
+    if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果 */
+    if(!j||!j.groups||!j.groups.length) throw new Error('快照还没有数据（盘后自动生成）');
+    DB.last=j; nationalRender(j);
+    if(hint) hint.textContent='已加载 国家队动向 · '+j.day+'（对比 '+j.prev+'）· Choice 盘后口径';
+  }catch(e){
+    if(gen!==DB.gen) return;
+    if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
+    if(hint) hint.textContent='加载失败';
+  }
+}
+async function dbLoadEtf(gen){
+  if(gen==null) gen=DB.gen;
+  const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
+  if(hint) hint.textContent='取数中…';
+  if(box) box.innerHTML='<div class="empty">加载中…（读 Choice 盘后快照）</div>';
+  try{
+    const r=await fetchT(snapBase()+'/v1/choice/snapshot/etf?t='+Date.now(),12000);
+    const j=await r.json();
+    if(gen!==DB.gen) return;
+    if(!j||!j.items||!j.items.length) throw new Error('快照还没有数据（盘后自动生成）');
+    DB.last=j; etfRender(j);
+    if(hint) hint.textContent='已加载 ETF 申赎 · '+j.day+'（对比 '+j.prev+'）· '+j.items.length+' 个行业 · Choice 盘后口径';
+  }catch(e){
+    if(gen!==DB.gen) return;
+    if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
+    if(hint) hint.textContent='加载失败';
+  }
+}
+function nationalRender(j){
+  const box=document.getElementById('dbBody'); if(!box) return;
+  const G=j.groups||[];
+  const upN=G.filter(function(g){return (+g.money||0)>0;}).length;
+  const dnN=G.filter(function(g){return (+g.money||0)<0;}).length;
+  const tot=G.reduce(function(s,g){return s+(+g.money||0);},0);
+  const tot5=G.reduce(function(s,g){return s+(+g.money5||0);},0);
+  const nEtf=G.reduce(function(s,g){return s+((g.items||[]).length);},0);
+  const S=snapSort(G,_natState,'name');
+  const COLS=[{k:'name',t:'宽基类别',lft:1},{k:'share',t:'净申赎(亿份)'},{k:'money',t:'净申赎(亿元)'},
+              {k:'money5',t:'5日累计(亿元)'},{k:'money20',t:'20日累计(亿元)'},{k:'',t:'增减持',lft:1}];
+  let h='<div class="db-cards">'
+    + dbCard('最新交易日', String(j.day||'—'), '对比 '+String(j.prev||'—'), 0)
+    + dbCard('当日净申赎', sgnBn(tot)+' 亿', upN+' 类增持 / '+dnN+' 类减持', tot)
+    + dbCard('5 日累计', sgnBn(tot5)+' 亿', '看趋势比单日可靠', tot5)
+    + dbCard('覆盖宽基 ETF', String(nEtf)+' 只', G.length+' 个类别', 0)
+    + '</div>';
+  h+='<div class="panel"><h3>宽基 ETF 申赎（'+ces(String(j.prev))+' → '+ces(String(j.day))+'）</h3>'
+    + '<p class="panel-sub"><b>份额增加 = 净申购 = 增持</b>，份额减少 = 净赎回 = 减持；金额 ≈ 份额变动 × 净值。'
+    + '<b>点类别行可展开</b>看该类下每只 ETF 的明细；<b>点表头排序</b>（当前：'
+    + ces((COLS.filter(function(c){return c.k===_natState.sk;})[0]||{t:'净申赎(亿元)'}).t)
+    + (_natState.sd<0?' 降序':' 升序')+'）。</p>'
+    + '<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_natState,COLS)+'</tr></thead><tbody>'
+    + S.map(function(g){
+        const it=g.items||[];
+        const upI=it.filter(function(x){return (+x.money||0)>0;}).length;
+        const dnI=it.filter(function(x){return (+x.money||0)<0;}).length;
+        const judge=((+g.money>0)?'<span class="db-up">增持</span>'
+                    :((+g.money<0)?'<span class="db-dn">减持</span>':'<span style="opacity:.5">持平</span>'));
+        const open=!!_natState.open[g.name];
+        let row='<tr class="nat-row" data-g="'+ces(g.name)+'" style="cursor:pointer">'
+          + '<td class="lft"><span style="opacity:.6">'+(open?'▾':'▸')+'</span> '+ces(g.name)
+          + ' <span style="opacity:.42;font-size:10px">'+it.length+' 只</span></td>'
+          + '<td class="'+((+g.share>=0)?'db-up':'db-dn')+'">'+sgnBn(g.share)+'</td>'
+          + '<td class="'+((+g.money>=0)?'db-up':'db-dn')+'"><b>'+sgnBn(g.money)+'</b></td>'
+          + '<td class="'+((+g.money5>=0)?'db-up':'db-dn')+'">'+sgnBn(g.money5)+'</td>'
+          + '<td class="'+((+g.money20>=0)?'db-up':'db-dn')+'">'+sgnBn(g.money20)+'</td>'
+          + '<td class="lft">'+judge+' <span style="opacity:.5;font-size:10.5px">'+upI+'增'+dnI+'减</span></td>'
+          + '</tr>';
+        if(open){
+          row+='<tr><td colspan="6" class="lft" style="padding:4px 10px 10px 24px;background:rgba(255,255,255,.02)">'
+            + '<table class="mkt-tb" style="font-size:12px"><thead><tr>'
+            + '<th class="lft">ETF</th><th>净申赎(亿份)</th><th>净申赎(亿元)</th><th>5日(亿元)</th><th>20日(亿元)</th>'
+            + '</tr></thead><tbody>'
+            + it.slice().sort(function(a,b){return Math.abs(+b.money)-Math.abs(+a.money);}).map(function(x){
+                return '<tr><td class="lft">'+ces(x.name)+' <span style="opacity:.4;font-size:10px">'+ces(x.code)+'</span></td>'
+                  + '<td class="'+((+x.share>=0)?'db-up':'db-dn')+'">'+sgnBn(x.share)+'</td>'
+                  + '<td class="'+((+x.money>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money)+'</td>'
+                  + '<td class="'+((+x.money5>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money5)+'</td>'
+                  + '<td class="'+((+x.money20>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money20)+'</td></tr>';
+              }).join('')
+            + '</tbody></table></td></tr>';
+        }
+        return row;
+      }).join('')
+    + '</tbody></table></div></div>';
+  box.innerHTML=h;
+  snapBindTh(box,_natState,function(){ nationalRender(DB.last||j); });
+  box.querySelectorAll('.nat-row').forEach(function(tr){
+    tr.onclick=function(){
+      const g=tr.getAttribute('data-g');
+      _natState.open[g]=!_natState.open[g];
+      nationalRender(DB.last||j);
+    };
+  });
+}
+function etfRender(j){
+  const box=document.getElementById('dbBody'); if(!box) return;
+  const IT=j.items||[];
+  const upN=IT.filter(function(x){return (+x.money||0)>0;}).length;
+  const dnN=IT.filter(function(x){return (+x.money||0)<0;}).length;
+  const tot=IT.reduce(function(s,x){return s+(+x.money||0);},0);
+  const byM=IT.slice().sort(function(a,b){return (+b.money||0)-(+a.money||0);});
+  const top3=byM.slice(0,3), bot3=byM.slice(-3).reverse();
+  const S=snapSort(IT,_etfState,'ind');
+  const COLS=[{k:'ind',t:'行业',lft:1},{k:'share',t:'份额变动(亿份)'},{k:'money',t:'资金变动(亿元)'},
+              {k:'money5',t:'5日累计(亿元)'},{k:'money20',t:'20日累计(亿元)'},{k:'n',t:'ETF 数'}];
+  const fmt2=function(a){ return a.map(function(x){return ces(x.ind)+' '+sgnBn(x.money);}).join(' · ')||'—'; };
+  let h='<div class="db-cards">'
+    + dbCard('最新交易日', String(j.day||'—'), '对比 '+String(j.prev||'—'), 0)
+    + dbCard('合计净申赎', sgnBn(tot)+' 亿', upN+' 行业净申购 / '+dnN+' 行业净赎回', tot)
+    + dbCard('净申购前三', (top3[0]?ces(top3[0].ind)+' '+sgnBn(top3[0].money)+' 亿':'—'), fmt2(top3.slice(1)), 1)
+    + dbCard('净赎回前三', (bot3[0]?ces(bot3[0].ind)+' '+sgnBn(bot3[0].money)+' 亿':'—'), fmt2(bot3.slice(1)), -1)
+    + '</div>';
+  h+='<div class="panel"><h3>行业 ETF 申赎（'+ces(String(j.prev))+' → '+ces(String(j.day))+'）</h3>'
+    + '<p class="panel-sub">份额变动 = 净申赎；金额 ≈ 份额变动 × 净值。<b>净申购</b>（红）= 资金借道 ETF 进场，'
+    + '<b>净赎回</b>（绿）= 资金离场。<b>点表头排序</b>（当前：'
+    + ces((COLS.filter(function(c){return c.k===_etfState.sk;})[0]||{t:'资金变动(亿元)'}).t)
+    + (_etfState.sd<0?' 降序':' 升序')+'）。</p>'
+    + '<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_etfState,COLS)+'</tr></thead><tbody>'
+    + S.map(function(x){
+        return '<tr>'
+          + '<td class="lft">'+ces(x.ind)+' <span style="opacity:.42;font-size:10px">'+(x.n||0)+' 只</span></td>'
+          + '<td class="'+((+x.share>=0)?'db-up':'db-dn')+'">'+sgnBn(x.share)+'</td>'
+          + '<td class="'+((+x.money>=0)?'db-up':'db-dn')+'"><b>'+sgnBn(x.money)+'</b></td>'
+          + '<td class="'+((+x.money5>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money5)+'</td>'
+          + '<td class="'+((+x.money20>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money20)+'</td>'
+          + '<td>'+(x.n||0)+'</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div></div>';
+  box.innerHTML=h;
+  snapBindTh(box,_etfState,function(){ etfRender(DB.last||j); });
 }
 /* ============ 板块数据（数据浏览「板块」页签）============
    数据走 Worker 的 /v1/sector/overview（Tushare 东财板块口径，盘后更新）。
@@ -5510,14 +5710,19 @@ async function chanceScanAll(){
       DB.busy=false; DB.gen++;
       tabs.forEach(function(x){ x.classList.toggle('on', x===b); });
       const isLhb=(t==='lhb'), isMkt=(t==='mkt'), isSec=(t==='sector');
-      const pw=document.getElementById('dbProductWrap'); if(pw) pw.style.display=(isLhb||isMkt||isSec)?'none':'';
+      const isNat=(t==='national'), isEtf=(t==='etf');
+      /* 「整段快照」类：内容是一整段（不是逐日翻页），日期导航与品种选择都要收起 */
+      const isSnap=isMkt||isSec||isNat||isEtf;
+      const pw=document.getElementById('dbProductWrap'); if(pw) pw.style.display=(isLhb||isSnap)?'none':'';
       const lv=document.getElementById('lhbView'); if(lv) lv.style.display=isLhb?'':'none';
-      const n1=document.getElementById('dbNoteCcpm'); if(n1) n1.style.display=(isLhb||isMkt||isSec)?'none':'';
+      const n1=document.getElementById('dbNoteCcpm'); if(n1) n1.style.display=(isLhb||isSnap)?'none':'';
       const n2=document.getElementById('dbNoteLhb'); if(n2) n2.style.display=isLhb?'':'none';
       const n3=document.getElementById('dbNoteMkt'); if(n3) n3.style.display=isMkt?'':'none';
-      /* 大盘 / 板块都是「整段时间的快照」（近一年或近 21 日 + 最新交易日），没有逐日翻页的概念 → 收起日期导航 */
+      const n4=document.getElementById('dbNoteNational'); if(n4) n4.style.display=isNat?'':'none';
+      const n5=document.getElementById('dbNoteEtf'); if(n5) n5.style.display=isEtf?'':'none';
+      /* 大盘 / 板块 / 国家队 / ETF 申赎都是「整段时间的快照」，没有逐日翻页的概念 → 收起日期导航 */
       ['dbPrev','dbDate','dbNext'].forEach(function(id){
-        const el=document.getElementById(id); if(el) el.style.display=(isMkt||isSec)?'none':'';
+        const el=document.getElementById(id); if(el) el.style.display=isSnap?'none':'';
       });
       const box=document.getElementById('dbBody'); if(box) box.innerHTML='<div class="empty">加载中…</div>';
       dbLoad(0);
