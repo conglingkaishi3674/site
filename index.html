@@ -337,6 +337,11 @@
  .snap-wrap tr.etf-row:hover,.snap-wrap tr.ind-row:hover{background:rgba(255,255,255,.05)}
  .snap-wrap tr.etf-row.open{background:rgba(95,168,255,.10)}
  .snap-wrap tr.snap-chart-row td{border-bottom:1px solid rgba(255,255,255,.10)}
+ .snap-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px;font-size:11px;color:var(--muted)}
+ .snap-bar .snap-rg{display:inline-flex;gap:4px}
+ .snap-bar button.sb{cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--muted);font-size:11px;padding:1px 8px;border-radius:10px;line-height:18px;font-family:inherit}
+ .snap-bar button.sb:hover{background:rgba(255,255,255,.12);color:#dfe3e8}
+ .snap-bar button.sb.on{background:rgba(95,168,255,.18);border-color:rgba(95,168,255,.5);color:#8cc4ff}
  /* 可排序表头：平时淡淡的，指上去亮起来，当前排序列高亮 + 箭头方向 */
  .sec-wrap th.srt{cursor:pointer;user-select:none;white-space:nowrap}
  .sec-wrap th.srt:hover{color:var(--text)}
@@ -1357,13 +1362,13 @@
    <div class="db-note" id="dbNoteNational" style="display:none">
     <b>怎么读这份数据：</b>汇金系（国家队）的调仓 <b>80% 以上走 ETF</b>，而 ETF 的份额每天更新 —— 所以<b>份额变动就是最直接的跟踪信号</b>：<b>份额增加 = 净申购 = 增持</b>，<b>份额减少 = 净赎回 = 减持</b>（场内买卖不改变份额，只有一级市场申赎才改）。<br>
     按宽基类别（上证50 / 沪深300 / 中证500 / 中证1000 / 创业板 / 科创板 / 双创50 / 金融）汇总当日净申赎；<b>点类别行可展开</b>看该类下每一只 ETF 的明细。<br>
-    ⚠ 三个实话：① 份额变动是<b>全体投资者的合力</b>，没法 100% 归因到某一家机构 —— 但汇金系在头部宽基 ETF 上的持有占比极高（部分产品超过 80%），所以<b>大额变动基本由它主导</b>；② 同时给出 <b>5 日 / 20 日累计</b>，单日噪声大、看趋势更准；③ 数据源 Choice，<b>日频、盘后更新</b>（份额通常 15:30 后才入库），所以当天看到的是<b>最近一个交易日</b>的结果。
+    ⚠ 三个实话：① 份额变动是<b>全体投资者的合力</b>，没法 100% 归因到某一家机构 —— 但汇金系在头部宽基 ETF 上的持有占比极高（部分产品超过 80%），所以<b>大额变动基本由它主导</b>；② 同时给出 <b>5 日 / 20 日累计</b>，单日噪声大、看趋势更准；③ 数据源是<b>交易所披露的 ETF 份额</b>，日频、盘后更新（通常收盘后几小时入库），所以当天看到的是<b>最近一个交易日</b>的结果。
    </div>
 
    <div class="db-note" id="dbNoteEtf" style="display:none">
     <b>怎么读这份数据：</b>按行业看 ETF 的申赎 —— <b>份额变动 = 净申赎</b>，金额 = 份额变动 × 净值。<b>净申购</b>说明有资金借道 ETF 进场（看多该行业），<b>净赎回</b>相反。<br>
     它和「板块资金流」是两回事：板块资金流看的是<b>二级市场成交</b>里谁在主动买卖（交易行为），ETF 申赎看的是<b>一级市场的份额增减</b>（真金白银的申购 / 赎回），后者更能反映中期配置意图。<br>
-    ⚠ 数据源 Choice，日频、盘后更新；每行汇总了该行业下若干只主流 ETF（见「ETF 数」列），<b>不是全部 ETF</b>，但覆盖了规模最大的那几只。表头可点排序。
+    ⚠ 数据源是<b>交易所披露的 ETF 份额</b>，日频、盘后更新；每行汇总了该行业下若干只主流 ETF（见「ETF 数」列），<b>不是全部 ETF</b>，但覆盖了规模最大的那几只。表头可点排序。
    </div>
   </section>
 
@@ -4887,10 +4892,13 @@ async function dbLoadMkt(gen){
   }
 }
 /* ============ 国家队动向 / ETF 申赎（数据浏览第 5、6 个页签）============
-   数据来自云服务器的 Choice 快照（_snapshot_etf.py，cron 工作日盘后每 20 分钟一轮）：
+   数据来自云服务器的盘后快照（_snapshot_etf.py，cron 工作日 08/18/21 各一轮）：
      /v1/choice/snapshot/national  宽基 ETF 份额变动（国家队跟踪）
      /v1/choice/snapshot/etf       行业 ETF 申赎
-   口径：份额变动 = 净申赎（场内买卖不改份额）；金额 ≈ 份额变动 × 当日净值。
+   口径：份额变动 = 净申赎（场内买卖不改份额）；金额 ≈ 份额变动 × 当日收盘价。
+   ⚠ 数据源 2026-10-10 从 Choice 换成 Tushare（fund_share / fund_daily，都是交易所口径）：
+     Choice 的 csd / ctr 额度太小（序列 50 万 cell/周、专题报表 10 次/周），
+     跑一轮全市场份额就要 11 万 cell，一两天就把额度打满（报 10001029）。
    ⚠ 快照里单位是「份 / 元」，界面统一显示成「亿份 / 亿元」。
    ⚠ 这两个页签是「整段快照」，没有逐日翻页 —— 日期导航会被收起。 */
 const _natState={sk:'money',sd:-1,open:{}};
@@ -4931,8 +4939,15 @@ function snapBindTh(box,st,redraw){
   });
 }
 /* ---------- 点开某只 ETF → 份额 + 价格 双轴折线 ----------
-   数据来自快照（每只自带 u=份额亿份序列 / p=收盘价序列，日期轴是共享的 j.dates）。 */
+   两段数据：
+     · 快照自带的近 20 日序列（u=份额亿份 / p=收盘价）—— 点开立刻画，不等网络；
+     · 云服务器 /v1/choice/series 的按需长序列（默认一年）—— 到了再无缝替换。
+   区间切换（3月/6月/1年）是纯前端切片，不重复请求。
+   ⚠ 快照必须保持短：400+ 只 ETF 都装长序列会让快照膨胀十倍、每次载入都吃亏。 */
 let SNAP_DATES=[], SNAP_SER={};
+const SNAP_HIST={};        /* code → {dates,u,p} 已拉到的长序列（会话内缓存） */
+const SNAP_FAIL={};        /* code → 失败时刻（5 分钟内不重复打） */
+const SNAP_RG=[['3月',63],['6月',125],['1年',250]];
 function snapFillSer(j){
   SNAP_DATES=(j&&j.dates)||[];
   SNAP_SER={};
@@ -4943,32 +4958,81 @@ function snapFillSer(j){
   };
   take(j&&j.groups); take(j&&j.items);
 }
+/* 按需拉长序列（一年）。失败就静默返回 null，调用方保留快照那 20 日 */
+function snapFetchHist(code,done){
+  if(SNAP_HIST[code]) return done(SNAP_HIST[code]);
+  if(SNAP_FAIL[code] && Date.now()-SNAP_FAIL[code]<300000) return done(null);
+  let fin=false;
+  const end=function(h){ if(fin) return; fin=true; if(!h) SNAP_FAIL[code]=Date.now(); done(h); };
+  fetchT(snapBase()+'/v1/choice/series?code='+encodeURIComponent(code)+'&days=250',15000)
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if(!j||!j.ok||!j.dates||j.dates.length<5) return end(null);
+      SNAP_HIST[code]={dates:j.dates,u:j.u||[],p:j.p||[]};
+      end(SNAP_HIST[code]);
+    })
+    .catch(function(){ end(null); });
+}
 function snapChartToggle(tr,ncols){
   const nx=tr.nextElementSibling;
   if(nx && nx.className==='snap-chart-row'){          /* 再点一次 = 收起 */
     if(nx.__chart){ try{ nx.__chart.dispose(); }catch(e){} }
     nx.remove(); tr.classList.remove('open'); return;
   }
-  const code=tr.getAttribute('data-code'), s=SNAP_SER[code];
-  if(!s){ return; }
+  /* ⚠ 2026-10-10 起快照不再自带份额序列（400+ 只装长序列会把 JSON 撑到几百 KB）
+     → SNAP_SER 里经常没有这只，但不代表看不了：直接走 /series 按需拉。
+     万一快照还带着短序列（旧数据），就先画着、等长序列到了再替换。 */
+  const code=tr.getAttribute('data-code'), s0=SNAP_SER[code]||null;
   const row=document.createElement('tr');
   row.className='snap-chart-row';
   const td=document.createElement('td');
   td.colSpan=ncols;
   td.style.cssText='padding:6px 10px 12px;background:rgba(255,255,255,.02)';
+  const bar=document.createElement('div');
+  bar.className='snap-bar';
   const box=document.createElement('div');
-  box.style.cssText='height:250px;width:100%';
-  td.appendChild(box); row.appendChild(td);
+  box.style.cssText='height:264px;width:100%';
+  td.appendChild(bar); td.appendChild(box); row.appendChild(td);
   tr.parentNode.insertBefore(row,tr.nextSibling);
   tr.classList.add('open');
+
+  /* st.quick = 快照近 20 日（秒出）；st.hist = 按需拉到的长序列；st.n = 显示最近多少个交易日 */
+  const st={quick:{dates:SNAP_DATES||[],u:(s0&&s0.u)||[],p:(s0&&s0.p)||[]},
+            hist:SNAP_HIST[code]||null,n:250,ch:null};
+  function cur(){ return st.hist||st.quick; }
+  function barUpd(msg){
+    const s=cur(), n=Math.max(1,Math.min(st.n,s.dates.length));
+    let h='';
+    if(st.hist){
+      h+='<span class="snap-rg">'+SNAP_RG.map(function(r){
+        return '<button type="button" class="sb'+(st.n===r[1]?' on':'')+'" data-n="'+r[1]+'">'+r[0]+'</button>';
+      }).join('')+'</span>';
+    }
+    h+='<span class="snap-st">'+(msg!=null?msg:(s.dates.length
+      ? ('份额(亿份)·左轴　收盘价·右轴　'+s.dates[s.dates.length-n]+' ~ '
+         +s.dates[s.dates.length-1]+'　共 '+n+' 个交易日')
+      : '正在拉取份额 / 价格历史…'))+'</span>';
+    bar.innerHTML=h;
+    bar.querySelectorAll('button.sb').forEach(function(b){
+      b.onclick=function(e){ e.stopPropagation(); st.n=+b.getAttribute('data-n'); snapApply(); };
+    });
+  }
+  function snapApply(){
+    if(!st.ch) return;
+    const s=cur(), n=Math.max(1,Math.min(st.n,s.dates.length)), k=s.dates.length-n;
+    st.ch.setOption({xAxis:{data:s.dates.slice(k)},
+                     series:[{data:s.u.slice(k)},{data:s.p.slice(k)}]});
+    barUpd();
+  }
   ensureECharts(function(){
     if(!box.isConnected) return;                      /* 期间被收起了 → 不画 */
+    const s=cur(), n=Math.max(1,Math.min(st.n,s.dates.length)), k=s.dates.length-n;
     const ch=echarts.init(box,null,{renderer:'canvas'});
     ch.setOption({
       tooltip:{trigger:'axis',axisPointer:{type:'cross'}},
       legend:{data:['份额(亿份)','收盘价'],left:'center',top:0,textStyle:{color:'#a5abb4',fontSize:11}},
       grid:{left:58,right:58,top:34,bottom:28},
-      xAxis:{type:'category',data:SNAP_DATES,boundaryGap:false,
+      xAxis:{type:'category',data:s.dates.slice(k),boundaryGap:false,
              axisLabel:{color:'#a5abb4',fontSize:10},axisLine:{lineStyle:{color:'#3a4048'}}},
       yAxis:[
         {type:'value',name:'份额(亿份)',scale:true,position:'left',
@@ -4981,16 +5045,27 @@ function snapChartToggle(tr,ncols){
          splitLine:{show:false}}
       ],
       series:[
-        {name:'份额(亿份)',type:'line',data:s.u,smooth:true,showSymbol:false,
+        {name:'份额(亿份)',type:'line',data:s.u.slice(k),smooth:true,showSymbol:false,
          lineStyle:{width:2,color:'#5fa8ff'},itemStyle:{color:'#5fa8ff'},
          areaStyle:{color:'rgba(95,168,255,.10)'}},
-        {name:'收盘价',type:'line',data:s.p,yAxisIndex:1,smooth:true,showSymbol:false,
+        {name:'收盘价',type:'line',data:s.p.slice(k),yAxisIndex:1,smooth:true,showSymbol:false,
          lineStyle:{width:2,color:'#ffd479'},itemStyle:{color:'#ffd479'}}
       ]
     });
-    row.__chart=ch;
+    st.ch=ch; row.__chart=ch;
     /* 切页签那一瞬容器可能还没量到宽高 → 画成 0×0（站内踩过），补一次 resize */
     setTimeout(function(){ try{ ch.resize(); }catch(e){} },90);
+    if(st.hist){ barUpd(); return; }
+    barUpd(st.quick.dates.length
+      ? ('正在拉取更长的历史…（当前仅快照近 '+st.quick.dates.length+' 日）')
+      : '正在拉取份额 / 价格历史…');
+    snapFetchHist(code,function(h){
+      if(!box.isConnected) return;                    /* 期间被收起了 → 不画 */
+      if(!h){ barUpd(st.quick.dates.length
+        ? ('长序列没取到，先看快照近 '+st.quick.dates.length+' 日')
+        : '份额 / 价格历史没取到，稍后再试'); return; }
+      st.hist=h; snapApply();
+    });
   });
 }
 /* 明细子表里的一只 ETF 行（可点开图） */
@@ -5017,14 +5092,14 @@ async function dbLoadNational(gen){
   if(gen==null) gen=DB.gen;
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
   if(hint) hint.textContent='取数中…';
-  if(box) box.innerHTML='<div class="empty">加载中…（读 Choice 盘后快照）</div>';
+  if(box) box.innerHTML='<div class="empty">加载中…（读盘后快照）</div>';
   try{
     const r=await fetchT(snapBase()+'/v1/choice/snapshot/national?t='+Date.now(),12000);
     const j=await r.json();
     if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果 */
     if(!j||!j.groups||!j.groups.length) throw new Error('快照还没有数据（盘后自动生成）');
     DB.last=j; nationalRender(j);
-    if(hint) hint.textContent='已加载 国家队动向 · '+j.day+'（对比 '+j.prev+'）· Choice 盘后口径';
+    if(hint) hint.textContent='已加载 国家队动向 · '+j.day+'（对比 '+j.prev+'）· 交易所份额口径';
   }catch(e){
     if(gen!==DB.gen) return;
     if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
@@ -5035,14 +5110,14 @@ async function dbLoadEtf(gen){
   if(gen==null) gen=DB.gen;
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
   if(hint) hint.textContent='取数中…';
-  if(box) box.innerHTML='<div class="empty">加载中…（读 Choice 盘后快照）</div>';
+  if(box) box.innerHTML='<div class="empty">加载中…（读盘后快照）</div>';
   try{
     const r=await fetchT(snapBase()+'/v1/choice/snapshot/etf?t='+Date.now(),12000);
     const j=await r.json();
     if(gen!==DB.gen) return;
     if(!j||!j.items||!j.items.length) throw new Error('快照还没有数据（盘后自动生成）');
     DB.last=j; etfRender(j);
-    if(hint) hint.textContent='已加载 ETF 申赎 · '+j.day+'（对比 '+j.prev+'）· '+j.items.length+' 个行业 · Choice 盘后口径';
+    if(hint) hint.textContent='已加载 ETF 申赎 · '+j.day+'（对比 '+j.prev+'）· '+j.items.length+' 个行业 · 交易所份额口径';
   }catch(e){
     if(gen!==DB.gen) return;
     if(box) box.innerHTML='<div class="empty">❌ '+ces(String((e&&e.message)||e))+'</div>';
@@ -5096,7 +5171,7 @@ function nationalRender(j){
             + it.slice().sort(function(a,b){return Math.abs(+b.money)-Math.abs(+a.money);})
                 .map(function(x){ return snapEtfRow(x,5); }).join('')
             + '</tbody></table>'
-            + '<p style="margin:6px 0 0;font-size:11px;color:var(--muted)">点任意一只 ETF 看它的<b>份额 / 价格</b>走势</p>'
+            + '<p style="margin:6px 0 0;font-size:11px;color:var(--muted)">点任意一只 ETF 看它<b>近一年的份额 / 价格</b>走势（图上方可切 3 月 / 6 月 / 1 年）</p>'
             + '</td></tr>';
         }
         return row;
@@ -5156,7 +5231,7 @@ function etfRender(j){
             + x.items.slice().sort(function(a,b){return Math.abs(+b.money)-Math.abs(+a.money);})
                 .map(function(y){ return snapEtfRow(y,5); }).join('')
             + '</tbody></table>'
-            + '<p style="margin:6px 0 0;font-size:11px;color:var(--muted)">点任意一只 ETF 看它的<b>份额 / 价格</b>走势</p>'
+            + '<p style="margin:6px 0 0;font-size:11px;color:var(--muted)">点任意一只 ETF 看它<b>近一年的份额 / 价格</b>走势（图上方可切 3 月 / 6 月 / 1 年）</p>'
             + '</td></tr>';
         }
         return row;
