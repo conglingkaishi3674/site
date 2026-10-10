@@ -1923,6 +1923,38 @@ function selectSectors(sectors,top){
   for(const r of head.concat(tail)){if(!seen.has(r[0])){seen.add(r[0]);out.push([r[0],cleanName(r[1])]);}}
   return out;
 }
+/* ---------- 分时留存：非交易时段也能看到「最近一个交易日」的分时曲线 ----------
+   分时数据只在盘中/刚收盘时给得到；到了周末或次日开盘前就是空的 ——
+   于是「榜单有值、曲线却是暂无分时数据」（用户 2026-10-10 反馈的就是这个）。
+   这里把拿到过的分时按**板块名**留存到 localStorage：
+     · 按名字存，不按代码 —— 盘中名单走东财 BK****、盘后走 Choice B_xxx，两套代码体系不通用
+       （代码存下来第二天根本对不上，名字才是稳定的）；
+     · 非交易时段拿不到新鲜分时就用它顶上，图表标题会标注留存的是哪一天；
+     · 只留最近 3 个交易日，自动滚动淘汰。 */
+const FLOW_KEEP_KEY='td_flow_keep_v1';
+let FLOW_KEEP=null;
+function keepDay(d){const p=n=>(n<10?'0':'')+n;return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function keepLoad(){
+  if(FLOW_KEEP!==null) return FLOW_KEEP;
+  try{ FLOW_KEEP=JSON.parse(localStorage.getItem(FLOW_KEEP_KEY)||'null')||{}; }catch(e){ FLOW_KEEP={}; }
+  return FLOW_KEEP;
+}
+function keepSave(day,by){
+  try{
+    const o=keepLoad(); o[day]={at:Date.now(),by:by};
+    const ks=Object.keys(o).sort().slice(-3), n={};
+    ks.forEach(k=>n[k]=o[k]);
+    localStorage.setItem(FLOW_KEEP_KEY,JSON.stringify(n));
+    FLOW_KEEP=n;
+  }catch(e){}
+}
+function keepPick(day){
+  /* 取「不晚于今天」的最近一份留存 */
+  const o=keepLoad(),ks=Object.keys(o).filter(k=>k<=day).sort();
+  if(!ks.length) return null;
+  const k=ks[ks.length-1];
+  return {day:k,by:(o[k]&&o[k].by)||{}};
+}
 
 /* ================= SVG 绘图（板块曲线，深色）================= */
 function hslHex(h,s,l){const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;let r,g,b;
@@ -2093,27 +2125,42 @@ async function refresh(){
     for(const [c,n,v] of sectors){if(accept(n)){const yi=v/1e8;curr[c]=[cleanName(n),yi];if(yi>=0)nin++;else nout++;}}
     const picked=selectSectors(sectors,CFG.top);
     const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c,useSina).then(s=>[n,s,c]).catch(()=>[n,null,c])));
+    const now=new Date();
     const seriesList=[];
+    /* 非交易时段（周末 / 次日开盘前）分时通常拿不到 → 用「留存」的最近一份顶上：
+       榜单/卡片照旧用当日累计值（curr），只有曲线用留存的，标题会标注留存日期。
+       ⚠ 开盘后（tradingNow）绝不用留存 —— 否则会把上一交易日的分时当成今天的。 */
+    const held=tradingNow(now)?null:keepPick(keepDay(now));
+    let heldUsed="";
+    const freshBy={};
     for(const [n,s,c] of got){
-      if(s&&s.length){ seriesList.push([n,s,s[s.length-1][1],c]); continue; }
+      if(s&&s.length){ seriesList.push([n,s,s[s.length-1][1],c]); freshBy[n]=s; continue; }
       /* 分时拿不到（非交易时段 / 上游挂掉 / 被限流）⇒ **绝不能把这个板块丢掉**。
          当日累计净流入在 curr 里已经有了（来自板块列表的同一次请求），用它顶上：
          列表、卡片、排名照常出值，只是这一条不画曲线。
          ⚠ 旧写法是 `if(s&&s.length) push(...)` —— 盘后**每个**板块都被丢掉，
-           seriesList 变空 ⇒ 曲线「暂无分时数据」、榜单「暂无」、卡片全是「—」。
-           用户反馈的「盘后板块资金流不显示」根因就在这一行（2026-10-10）。 */
+           seriesList 变空 ⇒ 曲线「暂无分时数据」、榜单「暂无」、卡片全是「—」。 */
+      const hv=held&&held.by[n];
+      if(hv&&hv.length){
+        seriesList.push([n,hv,(curr[c]?curr[c][1]:hv[hv.length-1][1]),c]);
+        if(!heldUsed) heldUsed=held.day;
+        continue;
+      }
       if(curr[c]) seriesList.push([n,[],curr[c][1],c]);
     }
+    /* 有新鲜分时就留存（按交易日归档）；留着周末/节后再打开时看 */
+    if(Object.keys(freshBy).length&&isTradingDay(now)) keepSave(keepDay(now),freshBy);
     seriesList.sort((a,b)=>b[2]-a[2]);
 
-    const now=new Date();const kind=CFG.industry?"行业":"概念";
-    /* ⚠ seriesList 里现在可能含「空分时」条目（盘后由当日累计值顶替），
+    const kind=CFG.industry?"行业":"概念";
+    /* ⚠ seriesList 里可能含「空分时」条目（盘后由当日累计值顶替），
        旧写法在空数组上取 [len-1][0] 会抛错 → 整块渲染崩。 */
     const f0=seriesList.length?seriesList[0][1]:null;
     const lastT=(f0&&f0.length)?f0[f0.length-1][0]:"—";
     /* 口径跟着数据源走：东财是「主力 = 超大单+大单」，新浪兜底时是「全部资金」，别标错 */
     const flowLabel=(sec.src==='sina')?'资金净流入':'主力资金净流入';
-    document.getElementById("chartsvg").innerHTML=renderSVG(seriesList,kind+"板块 "+flowLabel+"（累计·亿元）  截至 "+lastT);
+    document.getElementById("chartsvg").innerHTML=renderSVG(seriesList,kind+"板块 "+flowLabel+"（累计·亿元）  截至 "+lastT
+      +(heldUsed?("  · 分时留存 "+heldUsed):""));
 
     const lin=seriesList.filter(r=>r[2]>=0).slice(0,CFG.top);
     const lout=seriesList.filter(r=>r[2]<0).slice(-CFG.top).reverse();
@@ -6979,6 +7026,10 @@ let _echartsReady=false, _klineInst=null, _echartsLoading=false, _echartsQueue=[
       （实测直连 jsdelivr 25 秒、unpkg 3.6 秒，串行等于每次都吃最慢那个的苦头）；
    ③ fetch 全部失败时回退到 <script src> 串行加载（老环境的跨域限制兜底）。 */
 const ECHARTS_CACHE_KEY='td_echarts_src_v5.5.1';
+/* 首屏之后空闲预载 ECharts（1MB）——数据类页签第一次点开就不用干等下载了。
+   ⚠ 页面本身 760KB、ECharts 再 1MB，是「点开图表要等一会」的最大来源；
+     本地缓存命中时这一步几乎是瞬时的（只是把源码注入执行）。 */
+setTimeout(function(){ try{ if(!window.echarts) ensureECharts(function(){}); }catch(e){} },3000);
 function echartsInject(code){
   const s=document.createElement('script');
   s.textContent=code;                 /* 内联执行：与 <script src> 等价，但源码能存进缓存 */
