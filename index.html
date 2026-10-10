@@ -1346,6 +1346,7 @@
      <button id="lhbBySeat">按席位</button>
     </span>
     <span class="db-hint" id="dbHint">—</span>
+    <span class="db-hint" id="healthDot" style="cursor:pointer" title="服务器每日自检（点开看明细）"></span>
    </div>
 
    <div id="dbBody"><div class="empty">选一个品种，点「刷新」加载</div></div>
@@ -4907,6 +4908,33 @@ function dbAgo(ts){
   const m=Math.round((Date.now()-ts)/60000);
   return m<1?'刚刚':(m<60?m+' 分钟前':Math.round(m/60)+' 小时前');
 }
+/* ---------- 服务器自检状态（_health.py 每天 9:35 写 data/health.json）----------
+   服务器上任何一环挂掉（脚本失败 / 服务停了 / 数据不再更新），以前是**不会有人知道**
+   —— 站点踩过「采集脚本静默挂了 25 小时、计划任务状态却显示成功」。
+   这里把自检结果摆到数据浏览页工具栏：正常一个绿点，异常变黄并写清几项，点开看明细。 */
+let _healthJ=null;
+function healthShow(){
+  const el=document.getElementById('healthDot'); if(!el) return;
+  const j=_healthJ; if(!j){ el.textContent=''; return; }
+  const d=new Date(j.at), p2=function(n){ return (n<10?'0':'')+n; };
+  const hm=p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes());
+  const stale=(Date.now()-j.at)>36*3600*1000;      /* 超过 36 小时没更新 → 自检自己没在跑 */
+  if(stale) el.innerHTML='<span style="color:#ffd479">⚠ 自检已停更（'+hm+'）</span>';
+  else if(j.ok) el.innerHTML='<span style="color:#5dc48b">● 系统自检正常 · '+hm+'</span>';
+  else el.innerHTML='<span style="color:#ffd479">⚠ 自检异常 '+((j.bad||[]).length)+' 项 · '+hm+'</span>';
+  el.onclick=function(){
+    const lines=(j.items||[]).map(function(x){ return (x[1]==='ok'?'✓':'✗')+' '+x[0]+' — '+x[2]; });
+    alert('服务器自检 '+hm+'\n\n'+lines.join('\n'));
+  };
+}
+function healthLoad(){
+  const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
+  fetchT(base+'/v1/choice/health',10000)
+    .then(function(r){ return r.json(); })
+    .then(function(j){ if(j&&j.items){ _healthJ=j; healthShow(); } })
+    .catch(function(){});
+}
+setTimeout(healthLoad,1500);          /* 首屏之后再去问，不跟主内容抢带宽 */
 function dbSetFromCache(tab,j){
   DB.last=j;
   if(j.date) DB.date=j.date;
