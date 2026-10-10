@@ -7179,7 +7179,11 @@ function ensureECharts(cb){
     try{ localStorage.removeItem(ECHARTS_CACHE_KEY); }catch(e){}   /* 缓存坏了：丢掉重下 */
   }
 
-  const urls=['https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js',
+  /* ⚠ 第一个是**自家站点上的同名文件**（2026-10-10 加，跟 index.html 摆在一起）：
+     同域、免跨域、不看第三方 CDN 的线路脸色。
+     本地用 file:// 打开时它取不到 → 自动落到后面的 CDN，三源竞速的兜底逻辑不变。 */
+  const urls=['echarts.min.js',
+              'https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js',
               'https://unpkg.com/echarts@5.5.1/dist/echarts.min.js',
               'https://cdn.bootcdn.net/ajax/libs/echarts/5.5.1/echarts.min.js'];
   const ok=txt=>txt&&txt.length>600000&&txt.indexOf('echarts')>0;
