@@ -1564,7 +1564,7 @@
       <div class="news-pay">
        <div class="np-h">🔓 关于订阅</div>
        <p><b>为什么要付费：</b>站内的行情、K 线、龙虎榜、板块、今日机会、训练排行榜等功能<b>全部免费使用</b>，不收费。只有「消息面」的全文需要订阅，因为这一块的成本是实打实的支出：<b>每月服务器与云端采集电脑</b>的固定开销、<b>行情数据接口的 API 费用</b>，再加上长期订阅的几路<b>付费卖方消息</b>与<b>外媒报道</b>，每一项都要按月掏钱。所以消息面<b>免费只开放标题和正文开头</b>，全文留给订阅用户。</p>
-       <p><b>怎么开通：</b>小红书搜「<b>從零开始</b>」，下单后会拿到一串兑换码（形如 <code>ABCD-EFGH-IJKL</code>），填到上面的输入框里点「兑换」就行，<b>不用注册、不用绑手机</b>，换台设备输同一个码即可。</p>
+       <p><b>怎么开通：</b>小红书搜「<b>從零开始</b>」，到店铺里下单那个 <b>¥36.74 的冰箱贴</b>（它就是个付款入口，买什么不重要）；或者在公众号「<b>從零开始3674</b>」<b>打赏 ¥36.74</b>。付完<b>私信我</b>（也可以直接 QQ 找我），我把兑换码（形如 <code>ABCD-EFGH-IJKL</code>）发给你 —— 拿到后填到上面的输入框里点「兑换」就行，<b>不用注册、不用绑手机</b>。</p>
        <p><b>一张码的规则：</b>有效期 <b>1 个月</b>，最多可在 <b>3 台设备</b>上使用（手机、电脑都算）；中途换设备会占掉名额，所以别随便清理浏览器数据。到期再买一张续上就行。</p>
       </div>
      </div>
@@ -2748,7 +2748,13 @@ function subMsg(t,cls){
    免得访客看到「订阅」以为整个站都要钱。
    要上线收费时，改两处即可：
      ① 这里改成 true；② 服务端开墙 POST /v1/sub/cfg {gate:true}。
-   用 let 而非 const：测试里需要临时覆盖它来验完整逻辑（订阅条显隐 / 兑换 / 自愈）。 */
+   用 let 而非 const：测试里需要临时覆盖它来验完整逻辑（订阅条显隐 / 兑换 / 自愈）。
+   ⚠ 2026-10-10：界面与文案都已做好，但用户决定**付费部分暂缓上线** ⇒ 先置回 false，
+     这样本次推站只会带上「访问统计埋点」这类改动，不会把付费入口露出去。
+   将来要收费时按顺序做三件事：
+     ① 这里改成 true；② 推站；③ 最后服务端开墙 POST /v1/sub/cfg {gate:true}。
+   ⚠ 顺序不能反：墙一开线上立刻变成「只能看标题」，那时页面若还没推、没有兑换入口，
+     现有用户就全被挡在门外而且无处可兑。 */
 let SUB_UI_ON = false;
 
 function subPaint(){
@@ -8157,6 +8163,27 @@ refresh();
   const tag=document.getElementById("aiPersonaTag");
   if(tag) tag.textContent="AI 点评";
   const b=document.getElementById("aiBtn"); if(b) b.onclick=runReview;
+})();
+/* ---------- 访问统计：打开页面时上报一次 ----------
+   只报一个**浏览器本地生成的随机串**（localStorage 的 s_vid），服务端不记 IP、不记 UA、
+   不关联任何身份 —— 就为了回答「大概有多少人来过这个站」。
+   为什么只能这么做：页面托管在 GitHub Pages，**不经过 Cloudflare**
+   （实测响应头是 server: GitHub.com、没有 cf-ray），所以 CF 后台根本没有页面访问数据。
+   ⚠ 必须延后 + 静默失败：统计绝不能拖慢首屏，也绝不能因为上报失败而在控制台报错。
+   ⚠ 存不了 localStorage（隐私模式 / 禁 Cookie）就干脆不报 —— 否则每次都是新串，会把 UV 灌成假的。 */
+(function(){
+  let vid='';
+  try{
+    vid=localStorage.getItem('s_vid')||'';
+    if(!vid){ vid='v'+Math.random().toString(16).slice(2,10)+Date.now().toString(16);
+              localStorage.setItem('s_vid',vid); }
+  }catch(e){ return; }
+  setTimeout(function(){
+    try{
+      fetch(subBase()+'/v1/stat/hit',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({vid:vid}),keepalive:true}).catch(function(){});
+    }catch(e){}
+  },2500);          /* 推迟到首屏之后；此时同块后面的 const 也都过了 TDZ */
 })();
 setInterval(tick,1000);
 /* 每 5 分钟派发一次自选板块 / 多股对比的保活刷新（板块资金流由 tick 倒计时 + 下方动态间隔负责）*/
