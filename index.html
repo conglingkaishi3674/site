@@ -332,6 +332,11 @@
  /* 国家队 / ETF 申赎两个页签只有 6 列，沿用板块表那个 1040px 会留大片空白 → 单独给个更合适的底 */
  .snap-wrap{overflow-x:auto}
  .snap-wrap table{min-width:720px;font-size:12.5px}
+ /* 可点开的行：类别 / 行业行展开明细，明细里的 ETF 行点开看折线 */
+ .snap-wrap tr.etf-row,.snap-wrap tr.ind-row{cursor:pointer}
+ .snap-wrap tr.etf-row:hover,.snap-wrap tr.ind-row:hover{background:rgba(255,255,255,.05)}
+ .snap-wrap tr.etf-row.open{background:rgba(95,168,255,.10)}
+ .snap-wrap tr.snap-chart-row td{border-bottom:1px solid rgba(255,255,255,.10)}
  /* 可排序表头：平时淡淡的，指上去亮起来，当前排序列高亮 + 箭头方向 */
  .sec-wrap th.srt{cursor:pointer;user-select:none;white-space:nowrap}
  .sec-wrap th.srt:hover{color:var(--text)}
@@ -4889,7 +4894,7 @@ async function dbLoadMkt(gen){
    ⚠ 快照里单位是「份 / 元」，界面统一显示成「亿份 / 亿元」。
    ⚠ 这两个页签是「整段快照」，没有逐日翻页 —— 日期导航会被收起。 */
 const _natState={sk:'money',sd:-1,open:{}};
-const _etfState={sk:'money',sd:-1};
+const _etfState={sk:'money',sd:-1,open:{}};
 function snapBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
 /* 带符号的「亿元」：快照里是元，这里 /1e8 */
 function sgnBn(v){ return (v==null||isNaN(v))?'—':((+v>=0?'+':'')+((+v)/1e8).toFixed(2)); }
@@ -4923,6 +4928,89 @@ function snapBindTh(box,st,redraw){
       else { st.sk=k; st.sd=(k==='name')?1:-1; }
       redraw();
     };
+  });
+}
+/* ---------- 点开某只 ETF → 份额 + 价格 双轴折线 ----------
+   数据来自快照（每只自带 u=份额亿份序列 / p=收盘价序列，日期轴是共享的 j.dates）。 */
+let SNAP_DATES=[], SNAP_SER={};
+function snapFillSer(j){
+  SNAP_DATES=(j&&j.dates)||[];
+  SNAP_SER={};
+  const take=function(arr){
+    (arr||[]).forEach(function(g){
+      (g.items||[]).forEach(function(x){ if(x&&x.u&&x.u.length) SNAP_SER[x.code]={u:x.u,p:x.p}; });
+    });
+  };
+  take(j&&j.groups); take(j&&j.items);
+}
+function snapChartToggle(tr,ncols){
+  const nx=tr.nextElementSibling;
+  if(nx && nx.className==='snap-chart-row'){          /* 再点一次 = 收起 */
+    if(nx.__chart){ try{ nx.__chart.dispose(); }catch(e){} }
+    nx.remove(); tr.classList.remove('open'); return;
+  }
+  const code=tr.getAttribute('data-code'), s=SNAP_SER[code];
+  if(!s){ return; }
+  const row=document.createElement('tr');
+  row.className='snap-chart-row';
+  const td=document.createElement('td');
+  td.colSpan=ncols;
+  td.style.cssText='padding:6px 10px 12px;background:rgba(255,255,255,.02)';
+  const box=document.createElement('div');
+  box.style.cssText='height:250px;width:100%';
+  td.appendChild(box); row.appendChild(td);
+  tr.parentNode.insertBefore(row,tr.nextSibling);
+  tr.classList.add('open');
+  ensureECharts(function(){
+    if(!box.isConnected) return;                      /* 期间被收起了 → 不画 */
+    const ch=echarts.init(box,null,{renderer:'canvas'});
+    ch.setOption({
+      tooltip:{trigger:'axis',axisPointer:{type:'cross'}},
+      legend:{data:['份额(亿份)','收盘价'],left:'center',top:0,textStyle:{color:'#a5abb4',fontSize:11}},
+      grid:{left:58,right:58,top:34,bottom:28},
+      xAxis:{type:'category',data:SNAP_DATES,boundaryGap:false,
+             axisLabel:{color:'#a5abb4',fontSize:10},axisLine:{lineStyle:{color:'#3a4048'}}},
+      yAxis:[
+        {type:'value',name:'份额(亿份)',scale:true,position:'left',
+         nameTextStyle:{color:'#a5abb4',fontSize:10},
+         axisLabel:{color:'#a5abb4',fontSize:10,formatter:function(v){ return Math.round(v); }},
+         splitLine:{lineStyle:{color:'rgba(255,255,255,.06)'}}},
+        {type:'value',name:'收盘价',scale:true,position:'right',
+         nameTextStyle:{color:'#a5abb4',fontSize:10},
+         axisLabel:{color:'#a5abb4',fontSize:10},
+         splitLine:{show:false}}
+      ],
+      series:[
+        {name:'份额(亿份)',type:'line',data:s.u,smooth:true,showSymbol:false,
+         lineStyle:{width:2,color:'#5fa8ff'},itemStyle:{color:'#5fa8ff'},
+         areaStyle:{color:'rgba(95,168,255,.10)'}},
+        {name:'收盘价',type:'line',data:s.p,yAxisIndex:1,smooth:true,showSymbol:false,
+         lineStyle:{width:2,color:'#ffd479'},itemStyle:{color:'#ffd479'}}
+      ]
+    });
+    row.__chart=ch;
+    /* 切页签那一瞬容器可能还没量到宽高 → 画成 0×0（站内踩过），补一次 resize */
+    setTimeout(function(){ try{ ch.resize(); }catch(e){} },90);
+  });
+}
+/* 明细子表里的一只 ETF 行（可点开图） */
+function snapEtfRow(x,ncols){
+  return '<tr class="etf-row" data-code="'+ces(x.code)+'" data-nm="'+ces(x.name)+'">'
+    +'<td class="lft">'+ces(x.name)+' <span style="opacity:.4;font-size:10px">'+ces(x.code)+'</span></td>'
+    +'<td class="'+((+x.share>=0)?'db-up':'db-dn')+'">'+sgnBn(x.share)+'</td>'
+    +'<td class="'+((+x.money>=0)?'db-up':'db-dn')+'"><b>'+sgnBn(x.money)+'</b></td>'
+    +'<td class="'+((+x.money5>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money5)+'</td>'
+    +'<td class="'+((+x.money20>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money20)+'</td>'
+    +'</tr>';
+}
+/* 明细子表的表头 */
+function snapEtfHead(ncols){
+  return '<thead><tr><th class="lft">ETF</th><th>净申赎(亿份)</th><th>净申赎(亿元)</th>'
+    +'<th>5日(亿元)</th><th>20日(亿元)</th></tr></thead>';
+}
+function snapBindEtfRows(box,ncols){
+  box.querySelectorAll('tr.etf-row').forEach(function(tr){
+    tr.onclick=function(e){ e.stopPropagation(); snapChartToggle(tr,ncols); };
   });
 }
 async function dbLoadNational(gen){
@@ -4963,6 +5051,7 @@ async function dbLoadEtf(gen){
 }
 function nationalRender(j){
   const box=document.getElementById('dbBody'); if(!box) return;
+  snapFillSer(j);
   const G=j.groups||[];
   const upN=G.filter(function(g){return (+g.money||0)>0;}).length;
   const dnN=G.filter(function(g){return (+g.money||0)<0;}).length;
@@ -5002,17 +5091,13 @@ function nationalRender(j){
           + '</tr>';
         if(open){
           row+='<tr><td colspan="6" class="lft" style="padding:4px 10px 10px 24px;background:rgba(255,255,255,.02)">'
-            + '<table class="mkt-tb" style="font-size:12px"><thead><tr>'
-            + '<th class="lft">ETF</th><th>净申赎(亿份)</th><th>净申赎(亿元)</th><th>5日(亿元)</th><th>20日(亿元)</th>'
-            + '</tr></thead><tbody>'
-            + it.slice().sort(function(a,b){return Math.abs(+b.money)-Math.abs(+a.money);}).map(function(x){
-                return '<tr><td class="lft">'+ces(x.name)+' <span style="opacity:.4;font-size:10px">'+ces(x.code)+'</span></td>'
-                  + '<td class="'+((+x.share>=0)?'db-up':'db-dn')+'">'+sgnBn(x.share)+'</td>'
-                  + '<td class="'+((+x.money>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money)+'</td>'
-                  + '<td class="'+((+x.money5>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money5)+'</td>'
-                  + '<td class="'+((+x.money20>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money20)+'</td></tr>';
-              }).join('')
-            + '</tbody></table></td></tr>';
+            + '<table class="mkt-tb" style="font-size:12px">'+snapEtfHead()
+            + '<tbody>'
+            + it.slice().sort(function(a,b){return Math.abs(+b.money)-Math.abs(+a.money);})
+                .map(function(x){ return snapEtfRow(x,5); }).join('')
+            + '</tbody></table>'
+            + '<p style="margin:6px 0 0;font-size:11px;color:var(--muted)">点任意一只 ETF 看它的<b>份额 / 价格</b>走势</p>'
+            + '</td></tr>';
         }
         return row;
       }).join('')
@@ -5026,9 +5111,11 @@ function nationalRender(j){
       nationalRender(DB.last||j);
     };
   });
+  snapBindEtfRows(box,5);      /* 明细里的每只 ETF：点开看份额 / 价格折线 */
 }
 function etfRender(j){
   const box=document.getElementById('dbBody'); if(!box) return;
+  snapFillSer(j);
   const IT=j.items||[];
   const upN=IT.filter(function(x){return (+x.money||0)>0;}).length;
   const dnN=IT.filter(function(x){return (+x.money||0)<0;}).length;
@@ -5052,18 +5139,39 @@ function etfRender(j){
     + (_etfState.sd<0?' 降序':' 升序')+'）。</p>'
     + '<div class="snap-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_etfState,COLS)+'</tr></thead><tbody>'
     + S.map(function(x){
-        return '<tr>'
-          + '<td class="lft">'+ces(x.ind)+' <span style="opacity:.42;font-size:10px">'+(x.n||0)+' 只</span></td>'
+        const open=!!_etfState.open[x.ind];
+        let row='<tr class="ind-row" data-ind="'+ces(x.ind)+'" style="cursor:pointer">'
+          + '<td class="lft"><span style="opacity:.6">'+(open?'▾':'▸')+'</span> '+ces(x.ind)
+          + ' <span style="opacity:.42;font-size:10px">'+(x.n||0)+' 只</span></td>'
           + '<td class="'+((+x.share>=0)?'db-up':'db-dn')+'">'+sgnBn(x.share)+'</td>'
           + '<td class="'+((+x.money>=0)?'db-up':'db-dn')+'"><b>'+sgnBn(x.money)+'</b></td>'
           + '<td class="'+((+x.money5>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money5)+'</td>'
           + '<td class="'+((+x.money20>=0)?'db-up':'db-dn')+'">'+sgnBn(x.money20)+'</td>'
           + '<td>'+(x.n||0)+'</td>'
           + '</tr>';
+        if(open && x.items && x.items.length){
+          row+='<tr><td colspan="6" class="lft" style="padding:4px 10px 10px 24px;background:rgba(255,255,255,.02)">'
+            + '<table class="mkt-tb" style="font-size:12px">'+snapEtfHead()
+            + '<tbody>'
+            + x.items.slice().sort(function(a,b){return Math.abs(+b.money)-Math.abs(+a.money);})
+                .map(function(y){ return snapEtfRow(y,5); }).join('')
+            + '</tbody></table>'
+            + '<p style="margin:6px 0 0;font-size:11px;color:var(--muted)">点任意一只 ETF 看它的<b>份额 / 价格</b>走势</p>'
+            + '</td></tr>';
+        }
+        return row;
       }).join('')
     + '</tbody></table></div></div>';
   box.innerHTML=h;
   snapBindTh(box,_etfState,function(){ etfRender(DB.last||j); });
+  box.querySelectorAll('.ind-row').forEach(function(tr){
+    tr.onclick=function(){
+      const k=tr.getAttribute('data-ind');
+      _etfState.open[k]=!_etfState.open[k];
+      etfRender(DB.last||j);
+    };
+  });
+  snapBindEtfRows(box,5);      /* 展开后的每只 ETF：点开看份额 / 价格折线 */
 }
 /* ============ 板块数据（数据浏览「板块」页签）============
    数据走 Worker 的 /v1/sector/overview（Tushare 东财板块口径，盘后更新）。
