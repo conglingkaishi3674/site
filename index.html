@@ -342,6 +342,11 @@
  .snap-bar button.sb{cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--muted);font-size:11px;padding:1px 8px;border-radius:10px;line-height:18px;font-family:inherit}
  .snap-bar button.sb:hover{background:rgba(255,255,255,.12);color:#dfe3e8}
  .snap-bar button.sb.on{background:rgba(95,168,255,.18);border-color:rgba(95,168,255,.5);color:#8cc4ff}
+ .hist-bar{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+ .hist-bar button{cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--muted);font-size:11px;padding:2px 9px;border-radius:10px;line-height:18px;font-family:inherit}
+ .hist-bar button:hover{background:rgba(255,255,255,.12);color:#dfe3e8}
+ .hist-bar button.on{background:rgba(95,168,255,.18);border-color:rgba(95,168,255,.5);color:#8cc4ff}
+ .hist-bar button.hb-live.on{background:rgba(46,204,113,.16);border-color:rgba(46,204,113,.45);color:#7de2a8}
  /* 可排序表头：平时淡淡的，指上去亮起来，当前排序列高亮 + 箭头方向 */
  .sec-wrap th.srt{cursor:pointer;user-select:none;white-space:nowrap}
  .sec-wrap th.srt:hover{color:var(--text)}
@@ -1048,8 +1053,9 @@
   </div>
 
   <div class="panel">
-   <h3>主力资金净流入 · 累计分时曲线</h3>
+   <h3>主力资金净流入 · 累计分时曲线<span style="float:right;font-weight:400"><button id="histBtn" class="btn secondary" style="font-size:11px;padding:2px 10px">📅 历史回看</button></span></h3>
    <p class="panel-sub">分钟级更新、几十秒延迟。暖色 = 流入端、冷色 = 流出端，按末端金额排序。鼠标悬停看各板块该时刻数值。</p>
+   <div id="histBar" class="hist-bar" style="display:none"></div>
    <div class="chart" id="chart">
     <div id="chartsvg">加载曲线中…（首次抓取约需数秒）</div>
     <div id="crosshair"></div>
@@ -1893,6 +1899,9 @@ function parseFflow(kl){
     const v=parseFloat(p[1]);if(!isNaN(v))ser.push([hhmm,v/1e8]);}
   return ser;
 }
+/* 历史回看状态（服务器每个交易日盘后存一份板块分时，这里按日期翻）
+   ⚠ 用 var 不用 const：refresh() 同块、可能先于 const 初始化被调用 —— 那样 TDZ 会把整个函数打掉 */
+var HIST={days:[],cur:'',busy:false}, _histBound=false;
 async function fetchIntraday(code,useSina){
   /* useSina：板块名单来自新浪时必须为 true —— 两套代码体系不通用，拿东财的 BK 代码去问新浪
      只会得到空序列（反之亦然），所以由调用方按 sec.src 决定走哪条。 */
@@ -2113,6 +2122,8 @@ function money(v){                               // 元 → 亿/万
   return v.toFixed(0);
 }
 async function refresh(){
+  if(HIST.cur) return;              /* 正在看历史回看 → 自动刷新跳过（点「● 实时」才回来） */
+  if(!_histBound){ _histBound=true; const hb=document.getElementById("histBtn"); if(hb) hb.onclick=histToggle; }
   if(busy)return;busy=true;
   lastFlowOk=Date.now();
   document.getElementById("status").textContent="⏳ 抓取中…";
@@ -2150,6 +2161,9 @@ async function refresh(){
     }
     /* 有新鲜分时就留存（按交易日归档）；留着周末/节后再打开时看 */
     if(Object.keys(freshBy).length&&isTradingDay(now)) keepSave(keepDay(now),freshBy);
+    /* 再回传服务器存档（每个设备每天一次）：本机 localStorage 换个设备就没了，
+       服务端攒着才能跨设备翻日历；而且不同设备看到的前/后十名不一样，合并起来更全。 */
+    if(Object.keys(freshBy).length&&isTradingDay(now)) histUpload(keepDay(now),freshBy);
     seriesList.sort((a,b)=>b[2]-a[2]);
 
     const kind=CFG.industry?"行业":"概念";
@@ -2210,6 +2224,73 @@ async function refresh(){
   }catch(e){
     document.getElementById("status").textContent="❌ 抓取失败："+e.message+"（中转与直连均未成功，稍后会自动重试）";
   }finally{busy=false;}
+}
+/* ---------- 历史回看：服务端每日存档（服务器抓不到东财，改由浏览器回传；见 _choice_api.py） ---------- */
+function histBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
+function histUpload(day,freshBy){
+  /* 每个设备每天只传一次；传的是页面上看到的那批板块（浏览器不可能拉全市场 1000 个） */
+  let last=''; try{ last=localStorage.getItem('td_flow_hist_sent')||''; }catch(e){}
+  if(last===day) return;
+  const items=[];
+  Object.keys(freshBy).forEach(function(nm){ items.push([CFG.industry?'ind':'con',nm,freshBy[nm]]); });
+  if(items.length<2) return;
+  fetchT(histBase()+'/v1/choice/flowhist/save',12000,{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({day:day,items:items})})
+    .then(function(r){ return r.json(); })
+    .then(function(j){ if(j&&j.ok){ try{ localStorage.setItem('td_flow_hist_sent',day); }catch(e){} } })
+    .catch(function(){});
+}
+function histToggle(){
+  const bar=document.getElementById('histBar'); if(!bar) return;
+  if(bar.style.display!=='none'){ bar.style.display='none'; return; }
+  bar.style.display='';
+  if(HIST.days.length){ histPaint(); return; }
+  bar.innerHTML='<span style="color:#a5abb4;font-size:11px">读取历史列表…</span>';
+  fetchT(histBase()+'/v1/choice/flowhist/list',10000)
+    .then(function(r){ return r.json(); })
+    .then(function(j){ HIST.days=(j&&j.days)||[]; histPaint(); })
+    .catch(function(){ bar.innerHTML='<span style="color:#a5abb4;font-size:11px">历史列表读取失败</span>'; });
+}
+function histPaint(){
+  const bar=document.getElementById('histBar'); if(!bar) return;
+  const ds=HIST.days.slice(-40).reverse();        /* 新的在前 */
+  let h='<button type="button" class="hb-live'+(HIST.cur?'':' on')+'" data-d="">● 实时</button>';
+  if(!ds.length) h+='<span style="color:#a5abb4;font-size:11px">还没有历史存档（交易日盘后自动攒；当天打开过页面也会存）</span>';
+  ds.forEach(function(d){ h+='<button type="button" class="'+(HIST.cur===d?'on':'')+'" data-d="'+d+'">'+d.slice(5)+'</button>'; });
+  bar.innerHTML=h;
+  bar.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){ const d=b.getAttribute('data-d'); if(d) histLoad(d); else histLive(); };
+  });
+}
+function histLive(){ HIST.cur=''; histPaint(); refresh(); }
+function histLoad(day){
+  if(HIST.busy) return;
+  HIST.busy=true;
+  const svg=document.getElementById('chartsvg');
+  if(svg) svg.innerHTML='<div class="empty" style="padding:24px 0">读取 '+day+' 的存档…</div>';
+  fetchT(histBase()+'/v1/choice/flowhist?day='+day,15000)
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      HIST.busy=false;
+      if(!j||!j.items||!j.items.length){ if(svg) svg.innerHTML='<div class="empty" style="padding:24px 0">这一天没有存档</div>'; return; }
+      HIST.cur=day; histPaint();
+      const rows=[];
+      j.items.forEach(function(it){
+        const ser=it[2]||[]; if(!ser.length) return;
+        rows.push([it[1],ser,ser[ser.length-1][1],'']);
+      });
+      rows.sort(function(a,b){ return b[2]-a[2]; });
+      const kind=CFG.industry?'行业':'概念';
+      if(svg) svg.innerHTML=renderSVG(rows,kind+'板块 主力资金净流入（累计·亿元）  '+day+' 存档');
+      const lin=rows.filter(function(r){return r[2]>=0;}).slice(0,CFG.top);
+      const lout=rows.filter(function(r){return r[2]<0;}).slice(-CFG.top).reverse();
+      let h='';
+      lin.forEach(function(r){ h+='<tr><td>▲ '+r[0]+'</td><td class="v in">'+fmt(r[2])+'</td><td class="x"></td></tr>'; });
+      lout.forEach(function(r){ h+='<tr><td>▼ '+r[0]+'</td><td class="v out">'+fmt(r[2])+'</td><td class="x"></td></tr>'; });
+      const lb=document.getElementById('lb'); if(lb) lb.innerHTML=h||'<tr><td class="empty">—</td></tr>';
+      const st=document.getElementById('status'); if(st) st.textContent='📅 历史回看 '+day+'（非实时，点「● 实时」回来）';
+    })
+    .catch(function(){ HIST.busy=false; const s2=document.getElementById('chartsvg'); if(s2) s2.innerHTML='<div class="empty" style="padding:24px 0">存档读取失败</div>'; });
 }
 function tick(){if(nextAt){let s=Math.max(0,Math.round((nextAt-Date.now())/1000));
   document.getElementById("countdown").textContent=Math.floor(s/60)+"分"+pad2(s%60)+"秒";
