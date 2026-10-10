@@ -4868,6 +4868,47 @@ function lhbRender(j){
     };
   });
 }
+/* ---------- 数据浏览：本地缓存「先秒出、再刷新」 ----------
+   每个页签都要等 Worker 往返 1~3 秒（用户 2026-10-10 反馈「总是要等一会」）。
+   把上次成功加载的结果按页签存进 localStorage，切回来时**先用它画出来**，
+   再后台取新的、拿到就原地替换 —— 观感上就是秒开。
+   ⚠ 半成品（龙虎榜席位还没公布完的 __partial）不缓存，否则下次会把旧的半成品当完整数据。
+   ⚠ 超过 1.5MB 的响应不存：localStorage 只有 5MB 配额，别把别的挤掉。 */
+const DB_CACHE_TTL=6*3600*1000;
+function dbCacheGet(tab){
+  try{
+    const s=localStorage.getItem('td_db_'+tab);
+    if(!s) return null;
+    const o=JSON.parse(s);
+    if(!o||!o.j||!o.at||Date.now()-o.at>DB_CACHE_TTL) return null;
+    o.j.__at=o.at;
+    return o.j;
+  }catch(e){ return null; }
+}
+function dbCacheSet(tab,j){
+  if(!j||j.__partial) return;
+  try{
+    const s=JSON.stringify({at:Date.now(),j:j});
+    if(s.length>1500000) return;
+    localStorage.setItem('td_db_'+tab,s);
+  }catch(e){}
+}
+function dbAgo(ts){
+  if(!ts) return '刚刚';
+  const m=Math.round((Date.now()-ts)/60000);
+  return m<1?'刚刚':(m<60?m+' 分钟前':Math.round(m/60)+' 小时前');
+}
+function dbSetFromCache(tab,j){
+  DB.last=j;
+  if(j.date) DB.date=j.date;
+  if(tab==='mkt') mktRender(j);
+  else if(tab==='sector') sectorRender(j);
+  else if(tab==='national') nationalRender(j);
+  else if(tab==='etf') etfRender(j);
+  else dbRender(j);                       /* 龙虎榜 / 期指走同一个入口 */
+  const hint=document.getElementById('dbHint');
+  if(hint) hint.textContent='⚡ 已显示上次的数据（'+dbAgo(j.__at)+'），正在刷新…';
+}
 function dbRender(j){
   if(DB.tab==='lhb'){ lhbRender(j); return; }
   const box=document.getElementById('dbBody'); if(!box) return;
@@ -4948,6 +4989,11 @@ async function dbLoad(dir){
   DB.busy=true;
   const gen=++DB.gen;
   dir=dir||0;
+  /* 先秒出上次那份数据（翻页时跳过 —— 那次用户明确要看别的日期，拿缓存反而误导） */
+  if(!dir){
+    const cj=dbCacheGet(DB.tab);
+    if(cj){ try{ dbSetFromCache(DB.tab,cj); }catch(e){} }
+  }
   /* 大盘数据是「整段快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 走独立路径 */
   if(DB.tab==='mkt'){ await dbLoadMkt(gen); if(gen===DB.gen) DB.busy=false; return; }
   if(DB.tab==='sector'){ await dbLoadSector(gen); if(gen===DB.gen) DB.busy=false; return; }
@@ -4978,7 +5024,7 @@ async function dbLoad(dir){
       if(hint) hint.textContent=step>0?'往后找了 10 天也没有数据':'取数失败';
       if(gen===DB.gen) DB.busy=false; return;
     }
-    DB.date=j.date; DB.last=j;
+    DB.date=j.date; DB.last=j; dbCacheSet(DB.tab,j);
     const el=document.getElementById('dbDate'); if(el) el.value=dbPretty(j.date);
     dbRender(j);
     if(hint) hint.textContent = (DB.tab==='lhb')
@@ -5010,7 +5056,7 @@ async function dbLoadMkt(gen){
     const j=await r.json();
     if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果，不渲染 */
     if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
-    DB.date=j.last; DB.last=j;
+    DB.date=j.last; DB.last=j; dbCacheSet(DB.tab,j);
     mktRender(j);
     if(hint) hint.textContent='已加载 大盘数据 · '+dbPretty(j.last)+' · 近一年 '+(j.turnover||[]).length+' 个交易日（Tushare 盘后口径）';
   }catch(e){
@@ -5226,7 +5272,7 @@ async function dbLoadNational(gen){
     const j=await r.json();
     if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果 */
     if(!j||!j.groups||!j.groups.length) throw new Error('快照还没有数据（盘后自动生成）');
-    DB.last=j; nationalRender(j);
+    DB.last=j; dbCacheSet(DB.tab,j); nationalRender(j);
     if(hint) hint.textContent='已加载 国家队动向 · '+j.day+'（对比 '+j.prev+'）· 交易所份额口径';
   }catch(e){
     if(gen!==DB.gen) return;
@@ -5244,7 +5290,7 @@ async function dbLoadEtf(gen){
     const j=await r.json();
     if(gen!==DB.gen) return;
     if(!j||!j.items||!j.items.length) throw new Error('快照还没有数据（盘后自动生成）');
-    DB.last=j; etfRender(j);
+    DB.last=j; dbCacheSet(DB.tab,j); etfRender(j);
     if(hint) hint.textContent='已加载 ETF 申赎 · '+j.day+'（对比 '+j.prev+'）· '+j.items.length+' 个行业 · 交易所份额口径';
   }catch(e){
     if(gen!==DB.gen) return;
@@ -5424,7 +5470,7 @@ async function dbLoadSector(gen){
     const j=await r.json();
     if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果，不渲染 */
     if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
-    DB.last=j; sectorRender(j);
+    DB.last=j; dbCacheSet(DB.tab,j); sectorRender(j);
     if(hint) hint.textContent='已加载 板块数据 · '+dbPretty(j.last)+' · '+j.total+' 个板块（已剔除成分股 < '+j.minStocks+' 的与统计篮子）';
   }catch(e){
     if(gen!==DB.gen) return;
