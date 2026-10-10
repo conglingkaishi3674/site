@@ -329,6 +329,9 @@
  .sec-seg button.on{color:#fff;border-color:rgba(255,255,255,.42);background:rgba(255,255,255,.08)}
    .sec-wrap{overflow-x:auto}
  .sec-wrap table{min-width:1040px;font-size:12px}
+ /* 国家队 / ETF 申赎两个页签只有 6 列，沿用板块表那个 1040px 会留大片空白 → 单独给个更合适的底 */
+ .snap-wrap{overflow-x:auto}
+ .snap-wrap table{min-width:720px;font-size:12.5px}
  /* 可排序表头：平时淡淡的，指上去亮起来，当前排序列高亮 + 箭头方向 */
  .sec-wrap th.srt{cursor:pointer;user-select:none;white-space:nowrap}
  .sec-wrap th.srt:hover{color:var(--text)}
@@ -4980,7 +4983,7 @@ function nationalRender(j){
     + '<b>点类别行可展开</b>看该类下每只 ETF 的明细；<b>点表头排序</b>（当前：'
     + ces((COLS.filter(function(c){return c.k===_natState.sk;})[0]||{t:'净申赎(亿元)'}).t)
     + (_natState.sd<0?' 降序':' 升序')+'）。</p>'
-    + '<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_natState,COLS)+'</tr></thead><tbody>'
+    + '<div class="snap-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_natState,COLS)+'</tr></thead><tbody>'
     + S.map(function(g){
         const it=g.items||[];
         const upI=it.filter(function(x){return (+x.money||0)>0;}).length;
@@ -5047,7 +5050,7 @@ function etfRender(j){
     + '<b>净赎回</b>（绿）= 资金离场。<b>点表头排序</b>（当前：'
     + ces((COLS.filter(function(c){return c.k===_etfState.sk;})[0]||{t:'资金变动(亿元)'}).t)
     + (_etfState.sd<0?' 降序':' 升序')+'）。</p>'
-    + '<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_etfState,COLS)+'</tr></thead><tbody>'
+    + '<div class="snap-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(_etfState,COLS)+'</tr></thead><tbody>'
     + S.map(function(x){
         return '<tr>'
           + '<td class="lft">'+ces(x.ind)+' <span style="opacity:.42;font-size:10px">'+(x.n||0)+' 只</span></td>'
