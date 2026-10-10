@@ -4201,7 +4201,10 @@ async function chanceVerifyOne(code,preBars){
 /* 复核调度：每批 8 只并发（calcChan 要吃 800 根，一次开太多会卡住界面）。
    取数由 chanceVerifyOne 自己负责（直连腾讯优先、服务端兜底）。 */
 async function chanceVerify(list,onProg){
-  const out=[], CONC=8;
+  /* ⚠ 复核是**逐只拉 800 根日线**（准备阶段只拉 8 根判局部低点，两者不是同一份数据），
+     所以这一段的时间几乎全花在网络等待上 —— 主线程反而是空闲的（await 会让出去）。
+     因此并发从 8 提到 12：请求更快排完，用户少等；计算量（calcChan）很小、不是瓶颈。 */
+  const out=[], CONC=12;
   for(let i=0;i<list.length;i+=CONC){
     const chunk=list.slice(i,i+CONC);
     const rs=await Promise.all(chunk.map(function(x){ return chanceVerifyOne(x.code); }));
@@ -4455,6 +4458,8 @@ async function chanceKlineToggle(row,code,name){
 }
 async function chanceScan(){
   if(CHANCE.busy) return; CHANCE.busy=true;
+  /* 复核阶段「画到一半」的节流时间戳（见下面 chanceVerify 的回调） */
+  let _lastPaint=0;
   const hint=document.getElementById('chanceHint'), box=document.getElementById('chanceList'), tm=document.getElementById('chanceTime');
   if(Date.now()<CHANCE.cool){
     if(hint) hint.textContent='刚才失败过（行情源限流），'+Math.ceil((CHANCE.cool-Date.now())/60000)+' 分钟后可再试 —— 期间频繁点只会延长封禁';
@@ -4514,7 +4519,9 @@ async function chanceScan(){
       if(hint) hint.textContent='复核 '+raw.length+' 只（跑图上同一套缠论标注）…';
       const hit=await chanceVerify(raw,function(d,n,ok){
         if(hint) hint.textContent='复核 '+d+'/'+n+'（图上确认 '+ok.length+' 只）…';
-        if(ok.length) chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; }));
+        /* ⚠ 节流：复核每批（8 只）都重排一次整张表，扫描期间会明显发顿（用户反馈「卡卡的」）。
+           改成最多 400ms 画一次，且只画当前最新的完整结果。 */
+        if(ok.length && Date.now()-_lastPaint>400){ _lastPaint=Date.now(); chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; })); }
       });
       hit.sort(function(a,b){ return b.chg-a.chg; });
       CHANCE.items=hit; CHANCE.lastAt=Date.now();
@@ -4548,7 +4555,9 @@ async function chanceScan(){
       if(hint) hint.textContent='复核 '+raw.length+' 只（跑图上同一套缠论标注）…';
       hit=await chanceVerify(raw,function(d,n,ok){
         if(hint) hint.textContent='复核 '+d+'/'+n+'（图上确认 '+ok.length+' 只）…';
-        if(ok.length) chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; }));
+        /* ⚠ 节流：复核每批（8 只）都重排一次整张表，扫描期间会明显发顿（用户反馈「卡卡的」）。
+           改成最多 400ms 画一次，且只画当前最新的完整结果。 */
+        if(ok.length && Date.now()-_lastPaint>400){ _lastPaint=Date.now(); chanceRender(ok.slice().sort(function(a,b){ return b.chg-a.chg; })); }
       });
     }
     hit=hit.slice().sort((a,b)=>b.chg-a.chg);
