@@ -5845,8 +5845,29 @@ function chanceCacheKey(){ const d=new Date();
 function chanceCacheGet(){ try{ const o=JSON.parse(localStorage.getItem(chanceCacheKey())||'null');
   if(o&&o.days&&o.bars&&o.days.length) return o; }catch(e){}
   return null; }
-function chanceCacheSave(o){ try{ localStorage.setItem(chanceCacheKey(),
-  JSON.stringify({days:o.days,bars:o.bars,names:o.names||{}})); }catch(e){} }
+/* 写入全市场日线缓存（~588KB）。
+   ⚠ 必须**显式处理写失败**（2026-10-11 修）：localStorage 常见只有 5MB，而这个页面
+     还存着 ECharts 源码（1MB）、分时留存、各种 kcache —— 挤满之后 setItem 直接抛
+     QuotaExceededError。原来的 try/catch 静默吞掉 → 上层再读缓存拿回 null →
+     「今日机会」抛 Cannot read properties of null (reading 'days')。
+   现在的策略：写失败 → **腾掉可再生的缓存**（ECharts 源码能重新下载、分时留存是
+   当日的临时数据）→ 再试一次。还不行就放弃（上层已改成直接用返回的数据，不再依赖缓存）。 */
+function chanceCacheSave(o){
+  const payload=JSON.stringify({days:o.days,bars:o.bars,names:o.names||{}});
+  try{ localStorage.setItem(chanceCacheKey(),payload); return true; }catch(e){}
+  /* 腾位：只删「删了能自愈」的键，绝不碰用户的设置/自选/订阅标记 */
+  const DROP=[ECHARTS_CACHE_KEY,'td_flow_keep_v1'];
+  try{
+    for(let i=localStorage.length-1;i>=0;i--){
+      const k=localStorage.key(i);
+      if(!k) continue;
+      if(DROP.indexOf(k)>=0 || k.indexOf('td_kcache')===0 || k.indexOf('td_chance_all_')===0){
+        localStorage.removeItem(k);
+      }
+    }
+  }catch(e){}
+  try{ localStorage.setItem(chanceCacheKey(),payload); return true; }catch(e){ return false; }
+}
 /* 腾讯批量报价：一次可塞几百只，响应是一串 JS 全局变量
    `v_sh600519="1~名称~代码~现价~昨收~今开~…"`。站点本来就用这个套路
    （盯盘昨收、txKline 的 _var 注入都是它），这里按批注入 <script> 再把变量读回来。
@@ -5967,13 +5988,28 @@ async function chanceScanAll(){
   let data=chanceCacheGet();
   if(!data){
     if(hint) hint.textContent='取全市场日线…';
-    try{ const j=await chancePrevAll(); data=chanceCacheGet();
+    try{
+      const j=await chancePrevAll();
+      /* ⚠ **直接用刚拉到的 j，不要回头再读一次 localStorage**（2026-10-11 修）。
+         原来写的是 `data=chanceCacheGet()`：而 chanceCacheSave 是 try/catch **静默**
+         吞错的 —— localStorage 一旦写不进去（配额满：ECharts 源码 1MB + 分时留存
+         + 其它缓存挤在一起，588KB 的全市场日线就存不下），这里就拿回 null，
+         紧接着 `data.days` 抛 "Cannot read properties of null (reading 'days')"。
+         实测就是这个报错（用户 2026-10-11 截图）。写缓存只是**加速手段**，
+         不该成为唯一数据源。 */
+      data={days:j.days,bars:j.bars||{},names:j.names||{}};
       if(hint) hint.textContent='日线已加载 '+j.n+' 只 · '+(j.days||[]).join('/');
     }catch(e){
       CHANCE.cool=Date.now()+10*60*1000;
       if(hint) hint.textContent='日线取不到（'+((e&&e.message)||'')+'），10 分钟后再试';
       return null;
     }
+  }
+  /* 双保险：无论上面哪条路径，data 不可用都给出**可读提示**而不是抛 TypeError */
+  if(!data||!data.days||!data.days.length){
+    if(hint) hint.textContent='全市场日线数据不可用，5 分钟后自动重试';
+    CHANCE.cool=Date.now()+5*60*1000;
+    return null;
   }
   const days=data.days, bars=data.bars||{}, names=data.names||{};
   /* ⚠ all 模式的口径（2026-09-28 重做）：
@@ -8180,8 +8216,12 @@ refresh();
   }catch(e){ return; }
   setTimeout(function(){
     try{
+      /* src：标记页面来自哪个入口 —— 主域（GitHub Pages）=web；Worker 备用入口
+         （api 域名的 /s、/backup）=bk。服务端按它分开计数，这样能看出备用入口有没有人在用。
+         ⚠ host 取 location.hostname：api 子域就是备用入口，其余都算主站。 */
+      var _src = (location.hostname.indexOf('api.')===0) ? 'bk' : 'web';
       fetch(subBase()+'/v1/stat/hit',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({vid:vid}),keepalive:true}).catch(function(){});
+        body:JSON.stringify({vid:vid,src:_src}),keepalive:true}).catch(function(){});
     }catch(e){}
   },2500);          /* 推迟到首屏之后；此时同块后面的 const 也都过了 TDZ */
 })();
