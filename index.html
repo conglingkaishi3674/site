@@ -961,21 +961,9 @@
  .news-card .ni.tall .nbad{height:190px}
  .news-card .ni.bad img{display:none}
  .news-card .ni.bad .nbad{display:flex}
- .news-card .nfl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
- .news-card .nf{display:inline-flex;align-items:center;gap:5px;max-width:100%;
-   border:1px solid var(--line);border-radius:8px;padding:4px 8px;background:rgba(255,255,255,.03);font-size:12px}
- .news-card .nfn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
- .news-card .nfs{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
- .news-card .nfx{margin-top:7px}
- .news-card .nfh{margin-top:6px;color:var(--muted);font-size:11.5px}
- .news-card .nfxb{background:none;border:1px solid var(--line);border-radius:8px;
-   color:var(--amber);font-size:12px;padding:4px 10px;cursor:pointer;font-family:inherit}
- .news-card .nfxb:hover{border-color:var(--amber)}
- .news-card .nfxt{margin-top:7px;padding:9px 11px;border-left:2px solid var(--line);
-   background:rgba(255,255,255,.02);border-radius:0 8px 8px 0;
-   font-size:12.5px;line-height:1.72;color:var(--text);white-space:pre-wrap;
-   word-break:break-word;max-height:420px;overflow-y:auto}
- .news-card .nfxt:empty{display:none}
+ /* ⚠ 附件（PDF/文件）相关样式整组删除（2026-10-11）：元素已不再生成，
+    留着就是死代码 —— 上一轮就是"只删了说明没删功能"被用户抓到，这次删净。
+    原样式的类名：.nfl / .nf / .nfn / .nfs / .nfx / .nfh / .nfxb / .nfxt */
  @media (max-width:768px){
    .news-bar{gap:7px}
    .news-card{padding:9px 10px;border-radius:10px}
@@ -2950,7 +2938,7 @@ async function newsLoad(force){
     newsLoad(true);
   };
 })();
-function newsFmtSize(n){ n=+n||0; if(!n) return ''; return n>1048576 ? ((n/1048576).toFixed(1)+' MB') : (Math.max(1,Math.round(n/1024))+' KB'); }
+/* ⚠ `newsFmtSize()`（把字节转成 KB/MB）随附件功能一起去掉了 —— 它只服务于附件体积显示。 */
 function newsRender(items){
   const box=document.getElementById('newsList'); if(!box) return;
   /* 图片代理口：源站图床做了 Referer 白名单，外站直连只会拿到那张「未经允许不可引用」的
@@ -2974,7 +2962,7 @@ function newsRender(items){
   const locked=!!(NEWS.last&&NEWS.last.paid===false);
   let html=locked
     ? ('<div class="news-lock"><span>🔒</span><span>这是 <b>免费预览</b>：标题与正文开头可见，'
-       + '全文、图片、附件需要兑换码。在上方的「订阅」里输入兑换码即可解锁。</span></div>')
+       + '全文、图片需要兑换码。在上方的「订阅」里输入兑换码即可解锁。</span></div>')
     : '';
   let cur='';
   items.forEach(function(x){
@@ -2983,7 +2971,7 @@ function newsRender(items){
     if(d!==cur){ cur=d; html+='<div class="news-day">'+newsDay(d)+' <span class="nd">'+cnt[d]+' 条</span></div>'; }
     const body=String(x.x||'');
     const imgs=Array.isArray(x.img)?x.img:[];
-    const fls=Array.isArray(x.fl)?x.fl:[];
+    /* ⚠ 原来这里还有 `const fls=Array.isArray(x.fl)?x.fl:[];` —— 附件不再处理，一并去掉。 */
     const dups=Array.isArray(x.dup)?x.dup:[];
     const long=body.length>200;
     const meta=[];
@@ -2994,7 +2982,9 @@ function newsRender(items){
     if(x.c) meta.push(x.c+' 评论');
     if(x.k) meta.push(x.k+' 赞');
     if(imgs.length) meta.push(imgs.length+' 图');
-    if(fls.length) meta.push(fls.length+' 附件');
+    /* ⚠ 这里原来还有 `if(fls.length) meta.push(fls.length+' 附件')` —— 已去掉。
+       2026-10-11 用户明确：消息面**只要文字和图片**，不显示 PDF / 文件类附件。
+       （9/30 那次只删了「附件相关介绍文字」，渲染代码没删，留了半截，这次补齐。） */
     if(dups.length) meta.push('另有 '+dups.length+' 个来源');
 
     /* 判「被截断」：免费视图 + 正文正好 20 字（服务端的截断长度 SUB_FREE_CHARS）。
@@ -3017,23 +3007,10 @@ function newsRender(items){
           +'<span class="nbad">原图已过期</span></a>';
       }).join('')+'</div>';
     }
-    /* 附件：接口不提供下载链接，只显示名称与体积；PDF 正文由下方「附件正文」按需展开 */
-    if(fls.length){
-      html+='<div class="nfl">'+fls.map(function(f){
-        return '<span class="nf"><span class="nfi">📄</span>'
-          +'<span class="nfn" title="'+newsEsc(f.n)+'">'+newsEsc(f.n)+'</span>'
-          +(f.s?('<span class="nfs">'+newsFmtSize(f.s)+'</span>'):'')+'</span>';
-      }).join('')+'</div>';
-    }
-    /* 提取不出文字的附件给个明确交代 —— 否则用户会以为是按钮丢了 / 功能坏了 */
-    if(fls.length&&!x.fxl){
-      html+='<div class="nfh">该附件暂无法提取文字（扫描件或字体不含可读文本）</div>';
-    }
-    /* 附件正文：PDF 已提取成文字存在服务端，点开才拉（全文可能上万字，不进首屏） */
-    if(x.fxl){
-      html+='<div class="nfx"><button class="nfxb" data-tid="'+newsEsc(x.id)+'" data-n="'+x.fxl+'">附件正文 '+x.fxl+' 字</button>'
-        +'<div class="nfxt"></div></div>';
-    }
+    /* ⚠ 附件（PDF / 文件）整块**不再渲染**（2026-10-11 用户要求「只要文字和图片」）。
+       原来这里有三个块：① `.nfl` 文件名+体积列表；② `.nfh` 提取失败的说明；
+       ③ `.nfx` 「附件正文 N 字」展开按钮。全部去掉，也不再调 /v1/news/fx。
+       ⚠ 服务端也已同步不再下发 fl / fxl（前端删干净不代表接口删干净，F12 仍能看见）。 */
     html+='</article>';
   });
   box.innerHTML=html;
@@ -3050,28 +3027,9 @@ function newsRender(items){
       if(inp){ try{ inp.focus(); inp.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){ inp.focus(); } }
     };
   });
-  /* 附件正文按需拉取（全文可能上万字，只在点开时才传输，不进首屏） */
-  box.querySelectorAll('.nfxb').forEach(function(b){
-    b.onclick=function(){
-      const holder=b.parentNode.querySelector('.nfxt');
-      if(holder.dataset.on==='1'){
-        holder.dataset.on='0'; holder.textContent='';
-        b.textContent='附件正文 '+b.getAttribute('data-n')+' 字';
-        return;
-      }
-      b.textContent='读取中…';
-      const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
-      const tkq=SUB.tk?('&tk='+encodeURIComponent(SUB.tk)+'&did='+encodeURIComponent(SUB.did)):'';
-      fetch(base+'/v1/news/fx?tid='+encodeURIComponent(b.getAttribute('data-tid'))+tkq+'&_t='+Date.now(),{cache:'no-store'})
-        .then(function(r){ return r.json(); })
-        .then(function(j){
-          if(j&&j.ok&&j.fx){ holder.dataset.on='1'; holder.textContent=j.fx; b.textContent='收起附件正文'; }
-          else if(j&&j.error==='locked'){ b.textContent='🔒 附件正文需要兑换码'; }
-          else { b.textContent='附件正文读取失败'; }
-        })
-        .catch(function(){ b.textContent='附件正文读取失败'; });
-    };
-  });
+  /* ⚠ 附件正文的「点开才拉」逻辑随附件块一起去掉了（2026-10-11，用户要求只要文字+图片）。
+     对应的按钮 `.nfxb` 已不再生成，这段监听器留着也没意义。
+     服务端 `/v1/news/fx` 路由先保留（历史数据还在库里），但页面已不再调用。 */
   /* 图片失效（签名过期 / 被删）→ 给一个明确占位，而不是显示破图图标。
      失败顺序：代理口不通 → 回落直连原图（带 no-referrer）→ 还是不行才标 bad。 */
   box.querySelectorAll('.nimg img').forEach(function(im){
