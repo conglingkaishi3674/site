@@ -2742,20 +2742,15 @@ function subMsg(t,cls){
   const m=document.getElementById('subMsg'); if(!m) return;
   m.textContent=t||''; m.className='sub-msg'+(cls?(' '+cls):'');
 }
-/* CDK 订阅界面的**总开关**。
-   2026-10-10：码生成 / 设备绑定 / 付费墙 / 内容分级 全部做好并验证过了，
-   但还没开始收费 —— 所以先把界面收起来，网站对外保持「全部免费」的样子，
-   免得访客看到「订阅」以为整个站都要钱。
-   要上线收费时，改两处即可：
-     ① 这里改成 true；② 服务端开墙 POST /v1/sub/cfg {gate:true}。
+/* CDK 订阅界面的「总开关」。
+   2026-10-10：码生成 / 设备绑定 / 付费墙 / 内容分级 全部做好并验证过了；
+   2026-10-11：用户拍板「付费墙可以开了」⇒ 置为 true 并推站，随后服务端开墙。
    用 let 而非 const：测试里需要临时覆盖它来验完整逻辑（订阅条显隐 / 兑换 / 自愈）。
-   ⚠ 2026-10-10：界面与文案都已做好，但用户决定**付费部分暂缓上线** ⇒ 先置回 false，
-     这样本次推站只会带上「访问统计埋点」这类改动，不会把付费入口露出去。
-   将来要收费时按顺序做三件事：
-     ① 这里改成 true；② 推站；③ 最后服务端开墙 POST /v1/sub/cfg {gate:true}。
-   ⚠ 顺序不能反：墙一开线上立刻变成「只能看标题」，那时页面若还没推、没有兑换入口，
-     现有用户就全被挡在门外而且无处可兑。 */
-let SUB_UI_ON = false;
+   ⚠ 上线顺序**不能反**（反了会很难看）：
+     ① 这里改 true → ② 推站 → ③ 最后服务端开墙 POST /v1/sub/cfg {gate:true}。
+     若先开墙，线上立刻只给标题，而页面还没带上兑换入口 ——
+     现有用户被挡在门外，且连「怎么买」的说明都看不到，无处可兑。 */
+let SUB_UI_ON = true;
 
 function subPaint(){
   const bar=document.getElementById('subBar'), ico=document.getElementById('subIco');
