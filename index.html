@@ -2819,6 +2819,69 @@ async function subRedeem(){
     subMsg('兑换失败：'+((e&&e.message)||'网络不通'),'err');
   }finally{ SUB.busy=false; }
 }
+/* 单日翻页参数（📅 选了日期时用）。
+   ⚠ 为什么分页而不是一次要 1000 条：一天上千条时正文有 2~3MB，一次拉全用户要盯着
+     空白等好几秒；分页能让他**先看到最新的**、边看边补，而不是等一个白屏。
+   ⚠ DAY_MAX 是硬上限：源多了以后单日可能几千条，全塞进 DOM 会卡死浏览器
+     （每条约 2KB 正文 + 一个 DOM 块）。到顶后由「继续加载」接着拉。 */
+const DAY_PAGE=300, DAY_MAX=3000;
+NEWS.dayItems=[];
+/* 单日续拉：从 NEWS.dayItems 末尾那条的 at 往下翻，直到拿完或到 cap。
+   每页都重绘一次 —— 用户看得到内容在长出来，而不是干等。 */
+async function newsDayPull(base,tkQ,cap,onProg){
+  let got=0, guard=0;
+  while(NEWS.dayItems.length<cap && guard++<30){
+    const last=NEWS.dayItems.length? NEWS.dayItems[NEWS.dayItems.length-1] : null;
+    const before=last? String(last.at||'') : '';
+    const url=base+'/v1/news?n='+DAY_PAGE+'&day='+encodeURIComponent(NEWS.day)
+      +(before?('&before='+encodeURIComponent(before)):'')+tkQ+'&_t='+Date.now();
+    const r=await fetch(url,{cache:'no-store'});
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+    NEWS.dayTotal=j.dayTotal||0;
+    NEWS.dayPaid=(j.paid!==false);
+    const items=j.items||[];
+    if(!items.length) break;
+    NEWS.dayItems=NEWS.dayItems.concat(items);
+    got=items.length;
+    newsRender(NEWS.dayItems);
+    if(onProg) onProg(NEWS.dayItems.length, NEWS.dayTotal);
+    if(got<DAY_PAGE) break;                      /* 拿不满一页 = 当天取完了 */
+  }
+  return NEWS.dayItems.length;
+}
+/* 单日模式的提示文案：讲清「已加载多少 / 共多少」；还有剩余就给一颗「继续加载」。 */
+function newsDayHint(hint){
+  const n=NEWS.dayItems.length, t=NEWS.dayTotal||0;
+  if(t&&n<t){
+    hint.innerHTML=newsDay(NEWS.day)+'（'+NEWS.day+'）：'+n+' 条 / 共 '+t+' 条'
+      +'（还有 '+(t-n)+' 条'+(n>=DAY_MAX?('，单次最多 '+DAY_MAX+' 条'):'')+'）'
+      +'<a href="javascript:;" id="newsMore" style="color:#5ad1ff;margin-left:6px;cursor:pointer">继续加载</a>';
+    const a=document.getElementById('newsMore');
+    if(a) a.onclick=function(){ newsMorePull(hint); };
+    return;
+  }
+  hint.textContent=newsDay(NEWS.day)+'（'+NEWS.day+'）：'+n+' 条'+(t?(' / 共 '+t+' 条'):'');
+}
+/* 「继续加载」：接着当前进度往下拉（上限放开到已加载量 + DAY_MAX） */
+async function newsMorePull(hint){
+  if(NEWS.busy) return;
+  NEWS.busy=true;
+  try{
+    const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
+    const tkQ = SUB.tk ? ('&tk='+encodeURIComponent(SUB.tk)+'&did='+encodeURIComponent(SUB.did)) : '';
+    const cap=Math.max(DAY_MAX, NEWS.dayItems.length+DAY_MAX);
+    await newsDayPull(base,tkQ,cap,function(n,t){
+      if(hint) hint.textContent=newsDay(NEWS.day)+'：已加载 '+n+(t?(' / '+t):'')+' 条…';
+    });
+    NEWS.last={ok:true,items:NEWS.dayItems,day:NEWS.day,dayTotal:NEWS.dayTotal,
+               paid:NEWS.dayPaid,more:NEWS.dayItems.length<NEWS.dayTotal};
+    if(hint) newsDayHint(hint);
+  }catch(e){
+    if(hint) hint.textContent='读取失败：'+String((e&&e.message)||e).slice(0,80);
+  }
+  NEWS.busy=false;
+}
 async function newsLoad(force){
   if(NEWS.busy) return;
   /* 30 秒节流：反复切页签不会反复打接口；「⟳ 刷新」传 force 绕过 */
@@ -2827,35 +2890,37 @@ async function newsLoad(force){
   if(!box) return;
   const hint=document.getElementById('newsHint'), tm=document.getElementById('newsTime');
   const sel=document.getElementById('newsRange');
-  const n = NEWS.day ? 200 : +((sel&&sel.value)||40);
-  /* 单日模式下「最近 N 条」没有意义（那天尽量拉全，服务端上限 200），把下拉置灰 */
+  /* 单日模式下「最近 N 条」没有意义（那天要尽量拉全），把下拉置灰 */
   if(sel) sel.disabled = !!NEWS.day;
   NEWS.busy=true; NEWS.at=Date.now();
-  if(hint) hint.textContent = NEWS.day ? ('读取 '+newsDay(NEWS.day)+' …') : '读取中…';
   try{
     /* ⚠ CH_API 是同块后面的 const，**必须在函数体内取** —— 模块级取会撞 TDZ
        （同块内 typeof CH_API 也会抛，这是踩过的坑）。 */
     const base=(typeof CH_API!=='undefined'&&CH_API)?CH_API:'https://api.conglingkaishi3674.com';
-    /* day 非空 = 「只看这一天」（日历选出来的），交给服务端过滤，不拉全量再前端筛 */
-    const q = NEWS.day ? ('&day='+encodeURIComponent(NEWS.day)) : '';
     /* 带上订阅票据。未订阅就不带 —— 服务端据此给免费视图（付费墙没开时带不带都是全文） */
     const tkQ = SUB.tk ? ('&tk='+encodeURIComponent(SUB.tk)+'&did='+encodeURIComponent(SUB.did)) : '';
-    const r=await fetch(base+'/v1/news?n='+n+q+tkQ+'&_t='+Date.now(),{cache:'no-store'});
-    const j=await r.json();
-    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
-    NEWS.last=j;
-    newsRender(j.items||[]);
-    /* 服务端说这是「免费视图」，而本地还记着「已订阅」→ 票据多半已经失效（过期 / 被服务端清掉）。
-       立刻重新校验一次，免得订阅条写着「已订阅」而内容却是锁着的 —— 那看着就像功能坏了。 */
-    if(j.paid===false&&SUB.ok) subMe();
-    if(hint){
-      if(NEWS.day){
-        const cnt=(j.items||[]).length;
-        hint.textContent = newsDay(NEWS.day)+'（'+NEWS.day+'）：'+cnt+' 条'
-          + (j.more ? ('（当天还有更早的，只取了最新 '+cnt+' 条）') : '');
-      }else{
-        hint.textContent='服务端共 '+j.total+' 条'+(j.latest?(' · 最新 '+j.latest.slice(5,16).replace('T',' ')):'');
-      }
+    if(NEWS.day){
+      /* —— 只看某一天：翻页**拉到取完**（2026-10-11 用户要求「选日期时加载当天全部」）—— */
+      NEWS.dayItems=[]; NEWS.dayTotal=0;
+      if(hint) hint.textContent='读取 '+newsDay(NEWS.day)+' …';
+      const done=await newsDayPull(base,tkQ,DAY_MAX,function(n,t){
+        if(hint) hint.textContent=newsDay(NEWS.day)+'：已加载 '+n+(t?(' / '+t):'')+' 条…';
+      });
+      NEWS.last={ok:true,items:NEWS.dayItems,day:NEWS.day,dayTotal:NEWS.dayTotal,
+                 paid:NEWS.dayPaid,more:done<NEWS.dayTotal};
+      if(NEWS.dayPaid===false&&SUB.ok) subMe();
+      if(hint) newsDayHint(hint);
+    }else{
+      /* —— 全局：最近 N 条（原逻辑不变） —— */
+      const n=+((sel&&sel.value)||40);
+      if(hint) hint.textContent='读取中…';
+      const r=await fetch(base+'/v1/news?n='+n+tkQ+'&_t='+Date.now(),{cache:'no-store'});
+      const j=await r.json();
+      if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+      NEWS.last=j;
+      newsRender(j.items||[]);
+      if(j.paid===false&&SUB.ok) subMe();
+      if(hint) hint.textContent='服务端共 '+j.total+' 条'+(j.latest?(' · 最新 '+j.latest.slice(5,16).replace('T',' ')):'');
     }
     if(tm) tm.textContent=new Date().toLocaleTimeString('zh-CN',{hour12:false});
   }catch(e){
