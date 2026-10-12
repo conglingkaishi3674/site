@@ -245,6 +245,25 @@
  .db-toolbar input{background:var(--bg-soft);color:var(--text);border:1px solid var(--line);border-radius:9px;
    padding:6px 8px;font:inherit;font-size:13px;width:112px;text-align:center;letter-spacing:.5px}
  .db-hint{color:var(--muted);font-size:12px;margin-left:auto}
+ /* ===== 数据浏览 · 宏观数据（搜索式选指标 + 折线）===== */
+ .mx-bar{display:flex;gap:8px;margin:0 0 10px}
+ .mx-bar input{flex:1;background:var(--bg-soft);color:var(--text);border:1px solid var(--line);
+   border-radius:9px;padding:7px 10px;font:inherit;font-size:13px}
+ .mx-chips{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 10px}
+ .mx-chips button{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:999px;
+   padding:4px 12px;font:inherit;font-size:12px;cursor:pointer}
+ .mx-chips button:hover{border-color:rgba(95,168,255,.5);color:var(--text)}
+ .mx-item{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:7px 10px;
+   border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:var(--panel-2)}
+ .mx-item:hover{border-color:rgba(95,168,255,.5)}
+ .mx-item b{font-weight:600;font-size:13px}
+ .mx-item span{font-size:11px;color:var(--muted);white-space:nowrap}
+ .mx-card{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:4px}
+ .mx-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+ .mx-head b{font-size:14px}
+ .mx-val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--amber,#ffb85c)}
+ .mx-chart{width:100%;height:300px}
+ .mx-foot{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
  .db-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:12px}
  .db-card{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
  .db-card i{display:block;font-style:normal;font-size:11px;color:var(--muted);margin-bottom:3px}
@@ -946,6 +965,9 @@
  .news-card .ntm{font-size:12px;color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
  .news-card .nmeta{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
  .news-card .nx{white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.72}
+ /* 研报帖的标题（服务端把 PDF 文件名放进 ti、并清空了正文）—— 只在正文为空时渲染。
+    实测 97/97 的普通帖 ti 就是正文开头，两个都显示等于同一句话打两遍，所以不显示。 */
+ .news-card .nti{font-size:13.5px;font-weight:600;line-height:1.6;white-space:pre-wrap;word-break:break-word}
  .news-card.long .nx{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
  .news-card.long.open .nx{display:block;-webkit-line-clamp:unset}
  .news-card .nmore{background:none;border:0;color:var(--amber);font-size:12px;padding:4px 0 0;
@@ -1315,6 +1337,7 @@
     <button data-db="sector">板块数据</button>
     <button data-db="national">国家队动向</button>
     <button data-db="etf">ETF 申赎</button>
+    <button data-db="macro">宏观数据</button>
    </div>
 
    <div class="db-toolbar">
@@ -2216,16 +2239,35 @@ async function refresh(){
 /* ---------- 历史回看：服务端每日存档（服务器抓不到东财，改由浏览器回传；见 _choice_api.py） ---------- */
 function histBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
 function histUpload(day,freshBy){
-  /* 每个设备每天只传一次；传的是页面上看到的那批板块（浏览器不可能拉全市场 1000 个） */
-  let last=''; try{ last=localStorage.getItem('td_flow_hist_sent')||''; }catch(e){}
-  if(last===day) return;
+  /* ⚠⚠ 2026-10-12 修（用户提过两次「14:57~14:59 记录一下当天的」）：
+     原来这里是「**每个设备每天只传一次**」(`if(last===day) return`) —— 那是个设计错误。
+     早上打开页面就占了当天的名额，而那一刻只有几分钟的分时；当天再打开**也不会更新**，
+     于是**收盘前最全的那份永远传不上去**，日历里翻到那天只能看到一小段曲线。
+     ⇒ 改成「**越全越算数**」：记住本机上次传的**总点数**，只有比上次更全才发。
+       服务端 `flowhist_save` 本来就是「同名条目取点数多的那条」，所以晚发的更全版本
+       会自然覆盖早发的，不需要额外协议。
+     好处：早上那次先垫个底（不白传），**14:57~14:59 那次（数据最全）一定能落库**。 */
   const items=[];
-  Object.keys(freshBy).forEach(function(nm){ items.push([CFG.industry?'ind':'con',nm,freshBy[nm]]); });
-  if(items.length<2) return;
+  let total=0;
+  Object.keys(freshBy).forEach(function(nm){
+    const ser=freshBy[nm];
+    if(Array.isArray(ser)) total+=ser.length;
+    items.push([CFG.industry?'ind':'con',nm,ser]);
+  });
+  if(items.length<2||!total) return;
+  /* 本机上次传的「日期|总点数」 */
+  let prev=''; try{ prev=localStorage.getItem('td_flow_hist_n')||''; }catch(e){}
+  const sp=String(prev).split('|'), pDay=sp[0]||'', pN=+(sp[1]||0)||0;
+  if(pDay===day&&total<=pN) return;              /* 不比上次更全 → 不发 */
   fetchT(histBase()+'/v1/choice/flowhist/save',12000,{method:'POST',
     headers:{'Content-Type':'application/json'},body:JSON.stringify({day:day,items:items})})
     .then(function(r){ return r.json(); })
-    .then(function(j){ if(j&&j.ok){ try{ localStorage.setItem('td_flow_hist_sent',day); }catch(e){} } })
+    .then(function(j){
+      if(j&&j.ok){
+        try{ localStorage.setItem('td_flow_hist_sent',day);
+             localStorage.setItem('td_flow_hist_n',day+'|'+total); }catch(e){}
+      }
+    })
     .catch(function(){});
 }
 function histToggle(){
@@ -2970,6 +3012,13 @@ function newsRender(items){
     const d=String(x.d||at.slice(0,10));
     if(d!==cur){ cur=d; html+='<div class="news-day">'+newsDay(d)+' <span class="nd">'+cnt[d]+' 条</span></div>'; }
     const body=String(x.x||'');
+    /* ⚠ 标题只在**正文为空**时才显示（2026-10-12）。
+       实测线上 97/97 条普通帖的 `ti` 就是正文的开头（源站把正文前若干字截成标题），
+       两个都渲染等于同一句话显示两遍 —— 所以有正文时一律不显示标题。
+       唯一需要标题的场景是**研报分享帖**：正文原本只有一个句点、真名在附件 PDF 的文件名里
+       （服务端已把文件名写进 ti 并清空正文），这样那一行就从「.」变成有意义的研报名。 */
+    const ti=String(x.ti||'').trim();
+    const showTi=!!ti && !body;
     const imgs=Array.isArray(x.img)?x.img:[];
     /* ⚠ 原来这里还有 `const fls=Array.isArray(x.fl)?x.fl:[];` —— 附件不再处理，一并去掉。 */
     const dups=Array.isArray(x.dup)?x.dup:[];
@@ -2993,6 +3042,7 @@ function newsRender(items){
     html+='<article class="news-card'+(long?' long':'')+(locked?' locked':'')+'">'
       +'<div class="nh"><span class="ntm">'+at.slice(11,16)+'</span>'
       +'<span class="nmeta">'+newsEsc(meta.join(' · '))+'</span></div>'
+      +(showTi?'<div class="nti">'+newsEsc(ti)+'</div>':'')
       +(body?'<div class="nx">'+newsEsc(body)+(cut?'…':'')+'</div>':'')
       +(cut?'<span class="nl-more">🔒 解锁全文</span>':(long?'<button class="nmore">展开全文</button>':''));
 
@@ -6165,6 +6215,31 @@ async function chanceScanAll(){
          页面就永远停在「加载中…」。 */
       DB.busy=false; DB.gen++;
       tabs.forEach(function(x){ x.classList.toggle('on', x===b); });
+      /* ---- 宏观数据：**不走 dbLoad** ----
+         它是「搜指标 → 选一个 → 看图」的交互式模块，不是"某一天的市场快照"，
+         所以不参与日期翻页那套。这里只把日期导航收起、清空容器，剩下的交给 macroInit()。
+         ⚠ 必须 return，否则会继续往下跑 isSnap 分支并 dbLoad(0)，把容器又覆盖掉。 */
+      if(t==='macro'){
+        /* ⚠ 「刷新」按钮(dbGo) 也必须收起来：它的 onclick 是 dbLoad(1)，
+           而 dbLoad 会按 DB.tab 分发 —— tab='macro' 会落到默认的 dbRender()，
+           把宏观面板整个冲掉。宏观自己的刷新入口是搜索框和下面那排预设按钮。 */
+        ['dbPrev','dbDate','dbNext','dbGo'].forEach(function(id){
+          const el=document.getElementById(id); if(el) el.style.display='none';
+        });
+        const pw0=document.getElementById('dbProductWrap'); if(pw0) pw0.style.display='none';
+        ['dbHint','dbNoteCcpm','dbNoteLhb','dbNoteMkt','dbNoteNational','dbNoteEtf'].forEach(function(id){
+          const el=document.getElementById(id); if(el) el.style.display='none';
+        });
+        const lv0=document.getElementById('lhbView'); if(lv0) lv0.style.display='none';
+        DB.busy=false;
+        if(typeof macroInit==='function') macroInit();
+        return;
+      }
+      /* 从「宏观数据」切回来时，把上面收起来的控件恢复出来 */
+      ['dbPrev','dbDate','dbNext','dbGo'].forEach(function(id){
+        const el=document.getElementById(id); if(el) el.style.display='';
+      });
+      const hint0=document.getElementById('dbHint'); if(hint0) hint0.style.display='';
       const isLhb=(t==='lhb'), isMkt=(t==='mkt'), isSec=(t==='sector');
       const isNat=(t==='national'), isEtf=(t==='etf');
       /* 「整段快照」类：内容是一整段（不是逐日翻页），日期导航与品种选择都要收起 */
@@ -6197,6 +6272,112 @@ async function chanceScanAll(){
   if(bb) bb.onclick=function(){ setLhbView('buy'); };
   if(bz) bz.onclick=function(){ setLhbView('seat'); };
 })();
+/* ================= 数据浏览 · 宏观数据（Choice `edb`）=================
+   2026-10-12 新增。**为什么做成"搜索式"而不是写死几个指标**：
+   Choice 宏观库有几万个指标，写死就永远只能用那几个；而**指标检索口是公开的**
+   （不用登录、不占 Choice 额度）⇒ 让需求方自己搜，覆盖面无限。
+   ⚠ 只有**取数**那步走 Choice（占额度），所以服务器侧带 12 小时缓存。
+   ⚠ 取数走服务器 `/v1/choice/macro/*` —— Choice SDK 只能在服务器上调，浏览器调不了。 */
+const MX={id:'',name:'',chart:null};
+/* 常用预设（ID 都是实测过能出数的；CPI / 制造业PMI 用搜索口找即可） */
+const MX_PRESET=[
+  ['EMM00087086','M2 同比'],
+  ['EMM00073348','PPI 全部工业品 同比'],
+  ['EMM00634721','社会融资规模存量 同比'],
+  ['EMM00000012','GDP 不变价 同比']
+];
+function mxBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
+function mxEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function macroInit(){
+  const box=document.getElementById('dbBody'); if(!box) return;
+  if(document.getElementById('mxQ')) return;                 /* 已渲染过就不重建（保住当前选中的指标） */
+  box.innerHTML='<div class="mx-bar">'
+    +'<input id="mxQ" placeholder="搜宏观指标，例如：CPI / 社会融资 / 制造业PMI / 国债收益率">'
+    +'<button class="btn" id="mxGo">搜索</button></div>'
+    +'<div class="mx-chips" id="mxChips"></div>'
+    +'<div class="mx-list" id="mxList"></div>'
+    +'<div class="mx-card" id="mxCard" style="display:none">'
+    +'<div class="mx-head"><b id="mxName">—</b><span class="mx-val" id="mxVal">—</span></div>'
+    +'<div class="mx-chart" id="mxChart"></div><div class="mx-foot" id="mxFoot"></div></div>';
+  const ch=document.getElementById('mxChips');
+  ch.innerHTML=MX_PRESET.map(function(p){ return '<button data-mx="'+p[0]+'" data-mxn="'+mxEsc(p[1])+'">'+mxEsc(p[1])+'</button>'; }).join('');
+  ch.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){ macroShow(this.getAttribute('data-mx'),this.getAttribute('data-mxn')); };
+  });
+  const go=document.getElementById('mxGo'), q=document.getElementById('mxQ');
+  if(go) go.onclick=function(){ macroSearch(); };
+  if(q) q.onkeydown=function(e){ if(e.key==='Enter') macroSearch(); };
+  macroShow(MX_PRESET[0][0],MX_PRESET[0][1]);                /* 先展示第一个，不留白屏 */
+}
+async function macroSearch(){
+  const q=document.getElementById('mxQ'), list=document.getElementById('mxList');
+  if(!q||!list) return;
+  const kw=(q.value||'').trim();
+  if(!kw){ list.innerHTML=''; return; }
+  list.innerHTML='<div class="empty">搜索中…</div>';
+  try{
+    const r=await fetch(mxBase()+'/v1/choice/macro/search?q='+encodeURIComponent(kw)+'&n=12&_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+    const arr=j.list||[];
+    if(!arr.length){ list.innerHTML='<div class="empty">没搜到，换个词试试</div>'; return; }
+    list.innerHTML=arr.map(function(x,i){
+      return '<div class="mx-item" data-i="'+i+'"><b>'+mxEsc(x.name)+'</b><span>'
+        +mxEsc(x.freq?('频率'+x.freq):'')+(x.src?(' · '+mxEsc(x.src)):'')+(x.end?(' · 至 '+mxEsc(x.end)):'')
+        +'</span></div>';
+    }).join('');
+    list.querySelectorAll('.mx-item').forEach(function(el){
+      el.onclick=function(){ const x=arr[+this.getAttribute('data-i')]; macroShow(x.id,x.name); };
+    });
+  }catch(e){ list.innerHTML='<div class="empty">搜索失败：'+mxEsc(String((e&&e.message)||e).slice(0,90))+'</div>'; }
+}
+async function macroShow(id,name){
+  const card=document.getElementById('mxCard'); if(!card) return;
+  card.style.display='';
+  MX.id=id; MX.name=name||'';
+  document.getElementById('mxName').textContent=name||id;
+  document.getElementById('mxVal').textContent='读取中…';
+  document.getElementById('mxFoot').textContent='';
+  try{
+    const r=await fetch(mxBase()+'/v1/choice/macro/series?id='+encodeURIComponent(id)+'&years=5&_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+    const ser=j.series||[];
+    if(!ser.length) throw new Error('该指标暂无数据');
+    document.getElementById('mxVal').textContent=ser[ser.length-1][1];
+    document.getElementById('mxFoot').innerHTML='最新 <b>'+mxEsc(j.lastDate)+'</b> · 共 '+j.n+' 期'
+      +(j.cached?'（缓存）':'')+'　<span style="opacity:.75">数据源：东方财富 Choice · 宏观库</span>';
+    if(typeof ensureECharts==='function') ensureECharts(function(){ mxChart(ser); });
+    else mxChart(ser);
+  }catch(e){
+    document.getElementById('mxVal').textContent='—';
+    document.getElementById('mxFoot').textContent='读取失败：'+String((e&&e.message)||e).slice(0,120);
+  }
+}
+function mxChart(ser){
+  const el=document.getElementById('mxChart'); if(!el) return;
+  if(typeof echarts==='undefined'){ el.innerHTML='<div class="empty">图表库未就绪</div>'; return; }
+  /* ⚠ 必须比对 chart 当前挂的 DOM 是不是这个 el：
+     切走再切回时 `#dbBody` 被整体重写过，旧 div 已经脱离文档，
+     而 `MX.chart` 还指着它 —— 直接 setOption 会画到一个废对象上，
+     新容器**永远是空白**（而且不报错，很难查）。这种情况要 dispose 后重 init。 */
+  if(!MX.chart || (MX.chart.getDom && MX.chart.getDom()!==el)){
+    try{ if(MX.chart) MX.chart.dispose(); }catch(e){}
+    MX.chart=echarts.init(el);
+  }
+  const xs=ser.map(function(p){ return p[0]; }), ys=ser.map(function(p){ return p[1]; });
+  MX.chart.setOption({
+    grid:{left:8,right:16,top:18,bottom:6,containLabel:true},
+    tooltip:{trigger:'axis'},
+    xAxis:{type:'category',data:xs,axisLabel:{fontSize:10,color:'#a5abb4'},
+      axisLine:{lineStyle:{color:'rgba(255,255,255,.2)'}}},
+    yAxis:{type:'value',scale:true,axisLabel:{fontSize:10,color:'#a5abb4'},
+      splitLine:{lineStyle:{color:'rgba(255,255,255,.08)'}}},
+    series:[{type:'line',data:ys,smooth:true,showSymbol:false,
+      lineStyle:{width:2,color:'#5fa8ff'},areaStyle:{color:'rgba(95,168,255,.15)'}}]
+  },true);
+  MX.chart.resize();
+}
 function renderMyChips(){
   const box=document.getElementById("myStockChips"); if(!box) return;
   if(!MY.length){ box.innerHTML='<span class="empty">自选池为空 —— 搜索标的后点「＋ 加入自选」</span>'; return; }
