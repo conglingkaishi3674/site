@@ -6742,7 +6742,7 @@ function predInit(){
   else{
     const w=document.getElementById('pdWrap');
     if(w) w.innerHTML='<div class="empty">点上面的快捷按钮，或输入股票代码查询。<br>'
-      +'免费访客每天可查 <b>1 次</b>，用兑换码解锁后不限次。</div>';
+      +'免费访客每天可查 <b>1 次</b>；想不限次，去「<b>消息面</b>」输入兑换码解锁。</div>';
   }
 }
 async function pdLoad(code){
@@ -6773,9 +6773,15 @@ async function pdLoad(code){
 function pdQuota(){
   const wrap=document.getElementById('pdWrap'), sum=document.getElementById('pdSum');
   if(sum) sum.innerHTML='';
-  if(wrap) wrap.innerHTML='<div class="pd-gate"><b>今天的免费额度用完了</b>'
+  if(!wrap) return;
+  /* ⚠ 兑换入口在**消息面**，不在数据浏览页 —— 之前这里写「上面『订阅』里输入」是错的：
+     本页压根没有订阅入口，用户照着找会找不到（2026-10-13 用户截图反馈）。
+     ⚠⚠ 2026-10-13 用户明确要求：「**不需要你跳转，改一下文本就好**」——
+     我上一版自作主张加了个"去消息面兑换"的跳转按钮，被否掉了。
+     **记牢：用户说"改文本就好"就是只改文本，别自己加交互 / 加功能。** */
+  wrap.innerHTML='<div class="pd-gate"><b>今天的免费额度用完了</b>'
     +'<span>机构预测每个访客每天可免费查 <b>1 次</b>。<br>'
-    +'想随时查、不限次数，用兑换码解锁即可（上面「订阅」里输入）。</span></div>';
+    +'想随时查、不限次数？去<b>「消息面」</b>输入兑换码即可解锁。</span></div>';
 }
 function pdRender(j){
   const rows=j.rows||[], c=(j.consensus&&j.consensus.ok)?j.consensus:null;
