@@ -110,6 +110,28 @@
   border-radius:999px;padding:2px 10px;margin:2px 0}
 .rail-time.warn{color:#ffcc33;background:rgba(255,204,51,.10)}
 .rail-empty{font-size:12px;color:var(--muted);padding:8px 2px}
+/* ===== 右栏 · AI 助手（BYOK：用户自带 Key）=====
+   ⚠ .rail-scroll 自带 flex + gap:9px，所以 .ai-msg **不要再加 margin-bottom**，否则间距翻倍。 */
+.rail-note a{color:var(--amber,#ffb85c);text-decoration:none;margin-left:3px}
+.ai-cfg{display:flex;flex-direction:column;gap:5px;padding:9px 10px;margin:0 12px 8px;
+  background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:10px}
+.ai-cfg label{font-size:11.5px;color:var(--muted)}
+.ai-cfg input,.ai-cfg select{width:100%;background:rgba(0,0,0,.25);color:var(--text);
+  border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:inherit;font-size:12.5px}
+.ai-cfg-btns{display:flex;gap:6px;margin-top:3px}
+.ai-cfg-btns button{flex:1;background:transparent;color:var(--text);border:1px solid var(--line);
+  border-radius:7px;padding:5px 8px;font:inherit;font-size:12px;cursor:pointer}
+.ai-cfg-btns button:hover{border-color:rgba(95,168,255,.55)}
+.ai-cfg-tip{font-size:11px;color:var(--muted);line-height:1.65;margin-top:2px}
+.ai-msg .ai-who{font-size:11px;color:var(--muted);margin-bottom:3px}
+.ai-msg .ai-body{padding:7px 10px;border-radius:10px;font-size:12.8px;line-height:1.72;
+  word-break:break-word;overflow-wrap:anywhere}
+/* 我=蓝边、AI=灰边 —— 长回答里比"靠左靠右"更好读 */
+.ai-msg.me .ai-body{background:rgba(95,168,255,.13);border:1px solid rgba(95,168,255,.28)}
+.ai-msg.bot .ai-body{background:rgba(255,255,255,.045);border:1px solid var(--line)}
+.ai-warn{color:#ff8a80}
+.ai-sys{font-size:11.5px;color:var(--muted);line-height:1.75;border-left:2px solid var(--line);
+  padding:3px 8px}
 .rail-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px 12px;
   display:flex;flex-direction:column;gap:9px}
 .msg{max-width:88%;padding:7px 10px;border-radius:12px;font-size:12px;line-height:1.55;word-break:break-word}
@@ -264,6 +286,59 @@
  .mx-val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--amber,#ffb85c)}
  .mx-chart{width:100%;height:300px}
  .mx-foot{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
+ /* ===== 数据浏览 · 机构预测（券商评级与盈利预测汇总）=====
+    ⚠ 配色按 A 股习惯：看多=红、看空=绿（与欧美相反）。 */
+ .pd-wrap{margin-top:10px}
+ .pd-sum{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;padding:10px 12px;
+   border:1px solid var(--line);border-radius:11px;background:var(--panel-2)}
+ .pd-sum b{font-size:14px}
+ .pd-sub{color:var(--muted);font-size:12.5px}
+ .pd-dist{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:7px}
+ .pd-tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:6px;
+   border:1px solid var(--line);white-space:nowrap}
+ .pd-tag.up{color:#ff8a80;border-color:rgba(255,138,128,.45);background:rgba(255,138,128,.08)}
+ .pd-tag.dn{color:#81c784;border-color:rgba(129,199,132,.45);background:rgba(129,199,132,.08)}
+ .pd-tag.mid{color:var(--muted)}
+ .pd-dir.up{color:#ff8a80}
+ .pd-dir.dn{color:#81c784}
+ .pd-dir.mid{color:var(--muted)}
+ /* ⚠ 横滚加在**父容器**上（加在 table 本身无效，表格不是块级滚动容器）——
+    这样窄屏是「表格在容器内横滚」，页面本身不横滚。 */
+ .pd-tablewrap{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:11px}
+ .pd-table{width:100%;border-collapse:collapse;font-size:13px}
+ .pd-table th,.pd-table td{padding:7px 9px;border-bottom:1px solid var(--line);
+   white-space:nowrap;text-align:center}
+ .pd-table tbody tr:last-child td{border-bottom:0}
+ .pd-table th{color:var(--muted);font-weight:500;font-size:12.5px}
+ .pd-table th.lft,.pd-table td.lft{text-align:left}
+ .pd-table th.rt,.pd-table td.rt{text-align:right}
+ .pd-firm{font-weight:500}
+ .pd-rs{color:var(--muted);max-width:132px;overflow:hidden;text-overflow:ellipsis}
+ .pd-date{color:var(--muted);font-variant-numeric:tabular-nums}
+ .pd-foot{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.7}
+ /* 免费额度用完的提示块 */
+ .pd-gate{display:flex;flex-direction:column;gap:7px;padding:18px 14px;text-align:center;
+   background:var(--panel-2);border:1px solid var(--line);border-radius:11px;margin-top:10px}
+ .pd-gate b{font-size:14px;color:var(--amber,#ffb85c)}
+ .pd-gate span{font-size:12.5px;color:var(--muted);line-height:1.75}
+ .pd-sum-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;width:100%}
+ .pd-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:9px;width:100%;margin-top:9px}
+ .pd-k{display:flex;flex-direction:column;gap:2px;padding:8px 10px;
+   background:var(--bg-soft);border:1px solid var(--line);border-radius:9px}
+ .pd-k i{font-style:normal;font-size:11.5px;color:var(--muted)}
+ .pd-k b{font-size:15px;font-variant-numeric:tabular-nums}
+ .pd-k b.pd-big{font-size:20px;color:var(--amber,#ffb85c);line-height:1.25}
+ /* ⚠ A 股习惯：向上=红、向下=绿 */
+ .pd-space{font-size:12.5px;font-weight:600}
+ .pd-space.up{color:#ff8a80}
+ .pd-space.dn{color:#81c784}
+ .pd-note{font-size:11px;color:var(--muted)}
+ .pd-updown{font-size:12px;color:var(--muted);align-self:center}
+ .pd-modes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+ .pd-modes button{background:transparent;color:var(--muted);border:1px solid var(--line);
+   border-radius:999px;padding:3px 12px;font:inherit;font-size:12px;cursor:pointer}
+ .pd-modes button:hover{border-color:rgba(95,168,255,.5);color:var(--text)}
+ .pd-modes button.on{color:var(--text);border-color:rgba(95,168,255,.6);background:rgba(95,168,255,.08)}
  .db-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:12px}
  .db-card{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
  .db-card i{display:block;font-style:normal;font-size:11px;color:var(--muted);margin-bottom:3px}
@@ -1338,6 +1413,7 @@
     <button data-db="national">国家队动向</button>
     <button data-db="etf">ETF 申赎</button>
     <button data-db="macro">宏观数据</button>
+    <button data-db="pred">机构预测</button>
    </div>
 
    <div class="db-toolbar">
@@ -1619,6 +1695,7 @@
    <span class="seg rail-seg" id="railSeg">
     <button data-r="chat" class="active">聊天</button>
     <button data-r="cmt">评论</button>
+    <button data-r="ai">AI 助手</button>
    </span>
    <button class="rail-cal" id="railCal" title="按日期翻阅历史聊天 / 评论（待上线）">📅</button>
    <button class="rail-toggle" id="railToggle" title="收起 / 展开聊天评论"><span class="sb-ico">»</span></button>
@@ -1639,15 +1716,41 @@
    </div>
   </div>
 
-  <div class="rail-box" id="railCmt">
-   <div class="rail-note">评论区：欢迎写下<b>有判断、有依据</b>的看法，发出即公开、不用等审核。每人 <b>10 分钟一条</b>，记录保留 <b>3 个月</b>。广告与无意义内容会被删除。</div>
-   <div class="rail-scroll" id="cmtScroll"></div>
-   <div class="rail-input">
-    <input id="cmtInput" placeholder="写下你的看法…（10 分钟后可再发）">
-    <button class="rail-send" id="cmtSend">发布</button>
+   <div class="rail-box" id="railCmt">
+    <div class="rail-note">评论区：欢迎写下<b>有判断、有依据</b>的看法，发出即公开、不用等审核。每人 <b>10 分钟一条</b>，记录保留 <b>3 个月</b>。广告与无意义内容会被删除。</div>
+    <div class="rail-scroll" id="cmtScroll"></div>
+    <div class="rail-input">
+     <input id="cmtInput" placeholder="写下你的看法…（10 分钟后可再发）">
+     <button class="rail-send" id="cmtSend">发布</button>
+    </div>
    </div>
-  </div>
- </aside>
+
+   <!-- ===== AI 助手（BYOK：用户自带 API Key，本站不代付、不保存）===== -->
+   <div class="rail-box" id="railAi">
+    <div class="rail-note" id="aiNote">用<b>你自己的 API Key</b> 对话，费用由你直接付给服务商 ——
+     本站不代付、不转发、<b>不会保存你的 Key</b>。<a href="javascript:;" id="aiCfgBtn">⚙ 设置</a></div>
+    <div class="ai-cfg" id="aiCfg" style="display:none">
+     <label>服务商</label>
+     <select id="aiProv"><option value="deepseek">DeepSeek 官方 API</option></select>
+     <label>API Key</label>
+     <input id="aiKey" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false">
+     <label>模型</label>
+     <input id="aiModel" placeholder="deepseek-chat" autocomplete="off" spellcheck="false" list="aiModelList">
+     <datalist id="aiModelList"><option value="deepseek-chat"></option><option value="deepseek-reasoner"></option></datalist>
+     <div class="ai-cfg-btns">
+      <button id="aiSaveBtn">保存</button>
+      <button id="aiClearBtn">清除 Key</button>
+     </div>
+     <div class="ai-cfg-tip">Key 只存在<b>你这台设备的浏览器</b>里，请求直接发往服务商，不经过本站服务器。
+      共用的电脑请用完点「清除 Key」。建议用<b>设了消费上限</b>的子 Key。</div>
+    </div>
+    <div class="rail-scroll" id="aiScroll"></div>
+    <div class="rail-input">
+     <input id="aiInput" placeholder="问点什么…（Enter 发送）">
+     <button class="rail-send" id="aiSend">问</button>
+    </div>
+   </div>
+  </aside>
 
 <!-- ========== 选股结果快照（由 pick_export.js 覆盖生成，勿手改）==========
      用途：服务端 /v1/pick 未就绪时的离线兜底；口径与算法均在服务端，此处只是结果数据。
@@ -2424,14 +2527,235 @@ function afterLayoutChange(){
   const apply=(k,save)=>{
     seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.r===k));
     const chat=document.getElementById("railChat"), cmt=document.getElementById("railCmt");
+    const ai=document.getElementById("railAi");
     if(chat) chat.classList.toggle("on",k==="chat");
     if(cmt) cmt.classList.toggle("on",k==="cmt");
+    if(ai) ai.classList.toggle("on",k==="ai");
+    /* AI 用不到昵称和日期翻阅 ⇒ 切过去时把这两块收起来，省竖向空间给对话 */
+    const mine=document.querySelector(".rail-mine"), dt=document.getElementById("railDate");
+    const hid=(k==="ai");
+    if(mine) mine.style.display=hid?"none":"";
+    if(dt) dt.style.display=hid?"none":"";
     if(save){ try{ localStorage.setItem(KEY,k); }catch(e){} }
   };
   let init="chat";
   try{ init=localStorage.getItem(KEY)||"chat"; }catch(e){}
   apply(init,false);
   seg.querySelectorAll("button").forEach(b=>b.onclick=()=>apply(b.dataset.r,true));
+})();
+
+/* ==================== 右栏 · AI 助手（BYOK：用户自带 API Key）====================
+   设计要点（2026-10-12 用户拍板的方向）：
+   · **成本归用户**：他填自己的 Key，本站不代付、不中转、不保存 —— 这是唯一能让这个
+     功能长期开着而不烧钱的做法。
+   · **可行性已实测**：DeepSeek 的 `/chat/completions` **带 CORS 响应头**
+     （`access-control-allow-origin` 会回显请求方 Origin，`allow-headers: authorization,content-type`）
+     ⇒ 浏览器**可以直连**，不必经过我们的 Worker，所以 **Key 根本不经过本站服务器**，
+     比走中转更安全（中转方案还得防"被当开放代理刷"）。
+   · **人格**内置在本文件里（chatgyd 投资人格精简版）。放前端有两个好处：
+     ① 不经服务器；② 用户看得见自己用的是哪套设定。代价是谁都能 F12 拿走 —— 无所谓，它不是秘密。
+   · **历史**只留当前页面内存，刷新即清（隐私优先，也免得把 token 账单越攒越大）。
+   · ⚠ AI **没有实时行情**：人格里已硬性要求它"拿不到数据就说拿不到、不许编"。
+     以后若把站内数据（资金流/机构预测/宏观）当上下文喂进去，回答才会更贴。 */
+(function(){
+  const PROV={
+    deepseek:{name:'DeepSeek', base:'https://api.deepseek.com', model:'deepseek-chat'}
+  };
+  const STORE='td_ai_cfg';
+  const CTX_TURNS=12;                       /* 只带最近 12 轮，控制 token 开销 */
+  const AI={prov:'deepseek', key:'', model:'deepseek-chat', msgs:[], busy:false, cfgOpen:false, inited:false};
+  const $=function(id){ return document.getElementById(id); };
+  const esc=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  /* 极简 markdown（粗体 / 换行 / 圆点列表）—— 页面是单文件，不引第三方库 */
+  const fmt=function(s){
+    let t=esc(s);
+    t=t.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+    t=t.replace(/^[ \t]*[-•*][ \t]+(.*)$/gm,'· $1');
+    return t.replace(/\n/g,'<br>');
+  };
+  const PERSONA=[
+'你是 chatgyd，一位专业的 A 股投资分析助手（用户的「投资副驾」）。','',
+'【身份与边界】',
+'- 提供分析、框架、数据解读与风险提示；**不替用户做最终买卖决定**，不喊单，不给「买入/卖出」这类命令式结论。',
+'- 不确定就说不确定；**数据缺失就明说缺什么，绝不编造数字**。',
+'- 收尾时自然地说明：最终决定由用户自己做，你只负责把逻辑讲清楚。','',
+'【应答风格】',
+'1. 结论先行：第一句给核心判断，再给依据。',
+'2. 数据说话：用具体数字（点位、成交额、估值分位、财务指标），不空谈。',
+'3. 结构清晰：分点或表格；简洁优先，值得展开的地方再展开。',
+'4. 风险前置：凡涉及操作建议，必须同时给出失效条件与风险。',
+'5. 不做「神预测」：给情景（基准／乐观／悲观）而非单一断言；区分「稳定框架」与「临时观点」。','',
+'【分析顺序（默认按此执行）】',
+'1. 大盘量价：看**沪深两市合计成交额（亿元）**的放量与缩量位置（不看单市场、不看手数）。',
+'2. 大盘情绪：涨跌家数、涨停跌停数、两融余额、赚钱效应。',
+'3. 资金意图：钱在进还是在撤，主线在哪，是主线内轮动还是高低切。',
+'4. 短期推演：给情景 + 验证信号（什么条件算对、什么条件算错）。',
+'5. 技术定位：波浪（4 浪不破 1 浪顶）、黄金分割回撤位、均线、关键支撑压力。',
+'6. 板块与外部宏观：板块轮动做验证；**外部宏观只在美/中重大政策（降准降息、LPR、FOMC、点阵图等）或用户明确要求时才展开**。','',
+'【六层分析链（答个股或赛道问题时按此组织，缺哪层就明说哪层）】',
+'宏观定基调 → 产业链选赛道 → 基本面选公司 → 技术面择时 → 资金／情绪 → 风控。','',
+'【关键框架】',
+'- 量价永远优先：「没有不看量能的技术分析」。',
+'- 均线：13/34/60/144 日；144 属生命线级别。站上转强，跌破转弱。',
+'- 买点节奏：不追高；回踩 5/10 日线分批；主升行情龙头不破 5 日线；回踩 10/20 日线看二波。',
+'- 筹码：低位单峰密集 + 地量 = 吸筹接近完成；高位底部峰快速缩短并出现新峰 = 派发危险。',
+'- 道氏：趋势持续到峰谷结构被破坏才反转——不猜顶底。','',
+'【风控（最高优先级：「安全第一」）】',
+'- 先想亏多少，再想赚多少；进场前就定好止损位，破位无条件执行。',
+'- 不猜顶，用结构／均线／量能的被动止盈离场。',
+'- 不确定时降仓位；大级别向下时不参与小级别反弹。',
+'- **五道许可门**（开新仓前逐条自查，任何一门不过就不开）：',
+'  ① 环境许可：当前趋势与阶段允许做多吗？② 方向许可：这个板块是主线或潜在主线吗？',
+'  ③ 标的许可：个股角色清楚、且相对板块不弱吗？④ 触发许可：量价／结构／事件出现预定触发了吗？',
+'  ⑤ 风险许可：失效价、时间止损、计划亏损都清楚吗？',
+'  五门全过才允许常规仓位；**环境不通过时，个股再漂亮也不新开仓**。',
+'- **交易角色**：趋势／核心仓（容忍低级别噪声，按高级别失效退出）、波段／活动仓、日内 T 仓、现金。',
+'  角色写定后不得因盈亏临时改名——「T 仓亏了改叫长线仓」是最常见的错位。',
+'- 单笔计划亏损 = 账户权益 × r（r 按个人回撤承受力自设）；可买数量 = 计划亏损 ÷ |入场价 − 失效价|。','',
+'【高频词（自然使用，不要刻意堆砌）】',
+'主线、高低切、二买位、被动止盈、提前量、垃圾时间、GJD／国家队、量价背离、顶／底分型、',
+'大 4 回调、B 反／C 杀、保命、知行合一、安全第一、渗透率、命门环节、安全边际、预期差、',
+'降准降息、宽信用、筹码峰、止损单、进二退一、以横代调、回踩分批、五道许可门、试错仓、',
+'右侧确认、单笔计划亏损、不动区、状态升级。','',
+'【⚠️ 关于数据的硬性限制（务必遵守）】',
+'- 你**没有实时行情接口**，也读不到本站页面上的数字。',
+'- 若问题需要具体行情／成交额／财务数据而你手里没有：**明白告诉用户「我这边没有实时数据」**，',
+'  说明你需要哪些数据；建议他去本站的「消息面 / 板块资金流 / 机构预测 / 宏观数据」模块查看，',
+'  或把数据贴给你。**绝对不要凭印象编一个数字出来。**',
+'- 涉及个股但用户没给代码或数据时，先问清标的与时间维度再答。'
+  ].join('\n');
+  function loadCfg(){
+    try{ const j=JSON.parse(localStorage.getItem(STORE)||'{}')||{};
+      if(j.prov&&PROV[j.prov]) AI.prov=j.prov;
+      if(j.key) AI.key=String(j.key);
+      if(j.model) AI.model=String(j.model);
+    }catch(e){}
+  }
+  function saveCfg(){ try{ localStorage.setItem(STORE,JSON.stringify({prov:AI.prov,key:AI.key,model:AI.model})); }catch(e){} }
+  function syncCfgUI(){
+    const p=$('aiProv'), k=$('aiKey'), m=$('aiModel');
+    if(p) p.value=AI.prov; if(k) k.value=AI.key; if(m) m.value=AI.model;
+  }
+  function openCfg(on){
+    AI.cfgOpen=!!on;
+    const c=$('aiCfg'); if(c) c.style.display=on?'':'none';
+    if(on){ syncCfgUI(); const k=$('aiKey'); if(k) k.focus(); }
+  }
+  function scrollEnd(){ const b=$('aiScroll'); if(b) b.scrollTop=b.scrollHeight; }
+  function bubble(role,text){
+    const box=$('aiScroll'); if(!box) return null;
+    const d=document.createElement('div');
+    d.className='ai-msg '+(role==='user'?'me':'bot');
+    d.innerHTML='<div class="ai-who">'+(role==='user'?'我':'chatgyd')+'</div><div class="ai-body">'+fmt(text)+'</div>';
+    box.appendChild(d); scrollEnd();
+    return d.querySelector('.ai-body');
+  }
+  function sysNote(html){
+    const box=$('aiScroll'); if(!box) return;
+    const d=document.createElement('div'); d.className='ai-sys'; d.innerHTML=html;
+    box.appendChild(d); scrollEnd();
+  }
+  function setBusy(b){
+    AI.busy=b;
+    const btn=$('aiSend'), inp=$('aiInput');
+    if(btn){ btn.disabled=b; btn.textContent=b?'…':'问'; }
+    if(inp) inp.disabled=b;
+  }
+  /* 把 HTTP 错误翻成人话 —— 直接甩 401 用户不知道该怎么办 */
+  function hint(st,msg){
+    if(st===401||/auth|invalid.*key/i.test(msg)) return 'Key 无效或已过期（401）。点 ⚙ 设置 检查一下。';
+    if(st===402||/insufficient|balance|quota|欠费/i.test(msg)) return '服务商那边余额不足（402）。去充值后再试。';
+    if(st===429) return '请求太频繁（429），歇一会儿再问。';
+    if(st===400&&/model/i.test(msg)) return '模型名不对（400）：'+msg;
+    if(st===0) return '网络请求失败：可能是浏览器插件拦截或网络不通。';
+    return msg;
+  }
+  async function ask(){
+    const inp=$('aiInput'); if(!inp||AI.busy) return;
+    const q=(inp.value||'').trim(); if(!q) return;
+    if(!AI.key){ openCfg(true); sysNote('请先在 ⚙ 设置 里填入你自己的 API Key。'); return; }
+    const P=PROV[AI.prov]||PROV.deepseek;
+    inp.value='';
+    bubble('user',q);
+    AI.msgs.push({role:'user',content:q});
+    if(AI.msgs.length>CTX_TURNS*2) AI.msgs=AI.msgs.slice(-CTX_TURNS*2);
+    const body=bubble('assistant','');
+    setBusy(true);
+    let acc='';
+    try{
+      const r=await fetch(P.base+'/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+AI.key},
+        body:JSON.stringify({ model:AI.model||P.model,
+          messages:[{role:'system',content:PERSONA}].concat(AI.msgs),
+          stream:true, temperature:0.7 })
+      });
+      if(!r.ok){
+        let msg='HTTP '+r.status;
+        try{ const j=await r.json(); msg=(j.error&&(j.error.message||j.error.code))||j.message||msg; }catch(e){}
+        throw new Error(hint(r.status,msg));
+      }
+      /* SSE 流式：逐块读、按行切、只认 data: 开头的行 —— 让回答一个字一个字长出来。
+         ⚠ 必须自己拼 buffer：一次 read() 拿到的块**不保证**是完整的一行。 */
+      const rd=r.body.getReader(), dec=new TextDecoder();
+      let buf='';
+      while(true){
+        const s=await rd.read(); if(s.done) break;
+        buf+=dec.decode(s.value,{stream:true});
+        const parts=buf.split('\n'); buf=parts.pop();
+        for(let i=0;i<parts.length;i++){
+          const line=parts[i].trim();
+          if(line.indexOf('data:')!==0) continue;
+          const pay=line.slice(5).trim();
+          if(pay==='[DONE]') continue;
+          try{
+            const j=JSON.parse(pay);
+            const d=j.choices&&j.choices[0]&&j.choices[0].delta;
+            if(d&&d.content){ acc+=d.content; body.innerHTML=fmt(acc); scrollEnd(); }
+          }catch(e){}
+        }
+      }
+      if(!acc){ body.innerHTML='<span class="ai-warn">模型没返回内容（可能被内容策略拦了，或该模型不支持流式）。</span>'; }
+      else AI.msgs.push({role:'assistant',content:acc});
+    }catch(e){
+      const m=String((e&&e.message)||e);
+      if(body) body.innerHTML='<span class="ai-warn">'+esc(m)+'</span>';
+    }finally{ setBusy(false); inp.focus(); }
+  }
+  function initAi(){
+    if(AI.inited) return; AI.inited=true;
+    loadCfg(); syncCfgUI();
+    if(!AI.key){ openCfg(true); }
+    else sysNote('已就绪 · 模型 <b>'+esc(AI.model)+'</b> · 费用由你的 Key 直接结算。<br>'
+      +'提示：<b>我没有实时行情</b>——问具体数字时请把数据贴给我，或去站内「板块资金流 / 机构预测 / 宏观数据」看。');
+  }
+  function bind(){
+    const seg=$('railSeg');
+    if(seg) seg.querySelectorAll('button').forEach(function(b){
+      if(b.dataset.r==='ai') b.addEventListener('click',initAi);
+    });
+    /* ⚠ 现有的 .rail-send 默认是"禁用外观"（半透明、鼠标不变手），要加 .on 才可点 ——
+       聊天室那边是 JS 动态加/去的，AI 这个按钮始终可点（没填 Key 时点了会提示去设置）。 */
+    const btn=$('aiSend'); if(btn){ btn.classList.add('on'); btn.onclick=ask; }
+    const inp=$('aiInput');
+    if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ask(); } });
+    const cb=$('aiCfgBtn'); if(cb) cb.onclick=function(){ openCfg(!AI.cfgOpen); };
+    const sv=$('aiSaveBtn'); if(sv) sv.onclick=function(){
+      AI.prov=(($('aiProv')||{}).value)||'deepseek';
+      AI.key=((($('aiKey')||{}).value)||'').trim();
+      AI.model=((($('aiModel')||{}).value)||'').trim()||((PROV[AI.prov]||{}).model||'');
+      saveCfg(); openCfg(false); sysNote('已保存（只存在你这台设备的浏览器里）。');
+    };
+    const cl=$('aiClearBtn'); if(cl) cl.onclick=function(){
+      AI.key=''; AI.msgs=[];
+      const k=$('aiKey'); if(k) k.value='';
+      saveCfg();
+      const box=$('aiScroll'); if(box) box.innerHTML='';
+      sysNote('已清除 Key 与本次对话记录。');
+    };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind);
+  else bind();
 })();
 
 /* ==================== 右栏 聊天 / 评论 ====================
@@ -6219,10 +6543,10 @@ async function chanceScanAll(){
          它是「搜指标 → 选一个 → 看图」的交互式模块，不是"某一天的市场快照"，
          所以不参与日期翻页那套。这里只把日期导航收起、清空容器，剩下的交给 macroInit()。
          ⚠ 必须 return，否则会继续往下跑 isSnap 分支并 dbLoad(0)，把容器又覆盖掉。 */
-      if(t==='macro'){
+      if(t==='macro'||t==='pred'){
         /* ⚠ 「刷新」按钮(dbGo) 也必须收起来：它的 onclick 是 dbLoad(1)，
-           而 dbLoad 会按 DB.tab 分发 —— tab='macro' 会落到默认的 dbRender()，
-           把宏观面板整个冲掉。宏观自己的刷新入口是搜索框和下面那排预设按钮。 */
+           而 dbLoad 会按 DB.tab 分发 —— 落到默认的 dbRender() 会把面板整个冲掉。
+           这两个模块自己的入口分别是：宏观=搜索框+预设按钮；机构预测=代码输入框。 */
         ['dbPrev','dbDate','dbNext','dbGo'].forEach(function(id){
           const el=document.getElementById(id); if(el) el.style.display='none';
         });
@@ -6232,7 +6556,8 @@ async function chanceScanAll(){
         });
         const lv0=document.getElementById('lhbView'); if(lv0) lv0.style.display='none';
         DB.busy=false;
-        if(typeof macroInit==='function') macroInit();
+        if(t==='macro'&&typeof macroInit==='function') macroInit();
+        if(t==='pred'&&typeof predInit==='function') predInit();
         return;
       }
       /* 从「宏观数据」切回来时，把上面收起来的控件恢复出来 */
@@ -6353,6 +6678,184 @@ async function macroShow(id,name){
     document.getElementById('mxVal').textContent='—';
     document.getElementById('mxFoot').textContent='读取失败：'+String((e&&e.message)||e).slice(0,120);
   }
+}
+/* ==================== 机构预测（Choice ctr / InstPredictionInfo）====================
+   展示「各家券商最近怎么看这只股票」：机构 / 研究员 / 评级 / 调整方向 / 研究日期 / 预测 EPS / 预测 PE。
+   ⚠ 数据走服务器 `/v1/choice/pred/stock`（Worker 前缀转发到服务器 `/pred/stock`）。
+   ⚠ 该接口每次调用都占 Choice **专题报表额度** ⇒ 服务器侧按「代码+年度」缓存 6 小时，
+     来回切页签不会重复扣量。
+   ⚠ 只显示**评级与预测数值**，不转载研报正文 —— 这是数据，不是研报全文。 */
+const PD={code:'',name:'',year:0,rows:[]};
+/* 预设：挑的是大家常问的几只，用户想查别的直接输代码 */
+const PD_PRESET=[['600519','贵州茅台'],['300750','宁德时代'],['002594','比亚迪'],['000001','平安银行']];
+function pdBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
+function pdEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* 评级/方向归类 —— 决定颜色用**关键词**判，不写死枚举：
+   各券商评级名称五花八门（买入/强烈推荐/增持/优于大市/跑赢行业…），写死一定会漏。
+   ⚠ 配色按 A 股习惯：正面=红、负面=绿（与欧美相反）。 */
+function pdRateCls(s){
+  const t=String(s||'');
+  if(/卖出|减持|回避|弱于大市|跑输/.test(t)) return 'dn';
+  if(/买入|强烈推荐|推荐|增持|优于大市|跑赢/.test(t)) return 'up';
+  return 'mid';
+}
+function pdDirCls(s){
+  const t=String(s||'');
+  if(/上调|调高|调升/.test(t)) return 'up';
+  if(/下调|调低|调降/.test(t)) return 'dn';
+  return 'mid';
+}
+function predInit(){
+  const box=document.getElementById('dbBody'); if(!box) return;
+  if(document.getElementById('pdQ')) return;     /* 已渲染过就保住现状，别把用户查的结果擦了 */
+  box.innerHTML='<div class="mx-bar">'
+    +'<input id="pdQ" placeholder="输入股票代码，例如 600519 / 300750 / 002594">'
+    +'<button class="btn" id="pdGo">查询</button></div>'
+    +'<div class="mx-chips" id="pdChips"></div>'
+    +'<div id="pdSum"></div>'
+    /* 三个年度已有 EPS / 净利润 / PE 三套数 —— 列全铺会挤成麻花，
+       所以用切换按钮一次只看一套；按钮只在这里绑一次，重绘表格不影响它。 */
+    +'<div class="pd-modes" id="pdModes">'
+    +'<button data-m="eps" class="on">每股收益 EPS</button>'
+    +'<button data-m="np">归母净利润</button>'
+    +'<button data-m="pe">预测市盈率 PE</button></div>'
+    +'<div class="pd-wrap" id="pdWrap"></div>';
+  const md=document.getElementById('pdModes');
+  if(md) md.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){ pdMode(this.getAttribute('data-m')); };
+  });
+  const ch=document.getElementById('pdChips');
+  ch.innerHTML=PD_PRESET.map(function(p){
+    return '<button data-pd="'+p[0]+'">'+pdEsc(p[1])+' '+p[0]+'</button>';
+  }).join('');
+  ch.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){ pdLoad(this.getAttribute('data-pd')); };
+  });
+  const go=document.getElementById('pdGo'), q=document.getElementById('pdQ');
+  if(go) go.onclick=function(){ pdLoad(q.value); };
+  if(q) q.onkeydown=function(e){ if(e.key==='Enter') pdLoad(q.value); };
+  /* 订阅用户直接展示一只（无感）；**免费访客不自动查** ——
+     否则他一进页签就把当天唯一那 1 次额度用掉了，等真想查自己的股票时反而没得查。 */
+  let paid=false;
+  try{ paid=!!(typeof SUB!=='undefined'&&SUB&&SUB.ok); }catch(e){}
+  if(paid) pdLoad(PD_PRESET[0][0]);
+  else{
+    const w=document.getElementById('pdWrap');
+    if(w) w.innerHTML='<div class="empty">点上面的快捷按钮，或输入股票代码查询。<br>'
+      +'免费访客每天可查 <b>1 次</b>，用兑换码解锁后不限次。</div>';
+  }
+}
+async function pdLoad(code){
+  code=String(code||'').trim();
+  const wrap=document.getElementById('pdWrap'), sum=document.getElementById('pdSum');
+  if(!wrap) return;
+  if(!code){ wrap.innerHTML=''; if(sum) sum.innerHTML=''; return; }
+  wrap.innerHTML='<div class="empty">查询中…（首次约 3-8 秒）</div>';
+  if(sum) sum.innerHTML='';
+  try{
+    /* ⚠ 必须带上订阅票与设备 id：**订阅用户不限次，免费访客每天 1 次**。
+       闸门做在 Worker 侧（见 predQuota）而不是前端 —— 前端限流清个 localStorage 就绕过了。
+       不带票 = 被当成匿名访客，白白扣掉当天唯一那 1 次额度。 */
+    let tk='';
+    try{ tk=(typeof SUB!=='undefined'&&SUB&&SUB.tk)?SUB.tk:''; }catch(e){}
+    const idq='&did='+encodeURIComponent((typeof subDid==='function')?subDid():'');
+    const tkq=tk?('&tk='+encodeURIComponent(tk)):'';
+    const r=await fetch(pdBase()+'/v1/choice/pred/stock?code='+encodeURIComponent(code)+tkq+idq+'&_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    if(j&&j.error==='quota'){ pdQuota(); return; }   /* 免费额度用完 → 给明确下一步，别只丢个 403 */
+    if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
+    pdRender(j);
+  }catch(e){
+    wrap.innerHTML='<div class="empty">查询失败：'+pdEsc(String((e&&e.message)||e).slice(0,110))+'</div>';
+  }
+}
+/* 免费额度用完的提示 —— 关键是要告诉用户"下一步怎么办"，而不是甩一个错误码 */
+function pdQuota(){
+  const wrap=document.getElementById('pdWrap'), sum=document.getElementById('pdSum');
+  if(sum) sum.innerHTML='';
+  if(wrap) wrap.innerHTML='<div class="pd-gate"><b>今天的免费额度用完了</b>'
+    +'<span>机构预测每个访客每天可免费查 <b>1 次</b>。<br>'
+    +'想随时查、不限次数，用兑换码解锁即可（上面「订阅」里输入）。</span></div>';
+}
+function pdRender(j){
+  const rows=j.rows||[], c=(j.consensus&&j.consensus.ok)?j.consensus:null;
+  PD.rows=rows; PD.name=j.name||''; PD.code=j.code||''; PD.year=j.year||0;
+  PD.cons=c; PD.total=j.total||0; PD.firms=j.firms||0;
+  PD.close=(rows[0]&&rows[0].close)||null;
+  const sum=document.getElementById('pdSum');
+  /* ---------- 汇总卡：**一致预期**（各机构目标价的算术平均，Choice `css` 口径）----------
+     ⚠ 这里的目标价**不是某一家给的**，是全体机构的平均值 —— 已在文案里写明，
+       免得被当成"某个机构的目标价"（按机构的目标价在另一个接口，见服务器注释）。 */
+  let hd='<div class="pd-sum"><div class="pd-sum-hd"><b>'+pdEsc(j.name||j.code)+'</b>'
+    +'<span class="pd-sub">'+pdEsc(j.code)+' · '+j.year+' 年度预测'
+    +(j.firms?(' · '+j.firms+' 家机构给出预测'):'')+'</span></div>';
+  if(c){
+    const t=c.target, sp=(t&&PD.close)?((t/PD.close-1)*100):null;
+    hd+='<div class="pd-kv">'
+      +'<div class="pd-k"><i>一致目标价</i><b class="pd-big">'+(t==null?'—':t.toFixed(2))+'</b>'
+       +(sp==null?'':'<span class="pd-space '+(sp>=0?'up':'dn')+'">'+(sp>=0?'+':'')+sp.toFixed(1)+'%</span>')
+       +(PD.close==null?'':'<span class="pd-note">现价 '+PD.close.toFixed(2)+'</span>')+'</div>'
+      +'<div class="pd-k"><i>机构目标价区间</i><b>'
+       +((c.targetMin==null&&c.targetMax==null)?'—':(pdFmt(c.targetMin)+' ~ '+pdFmt(c.targetMax)))+'</b>'
+       +'<span class="pd-note">最低 ~ 最高，分歧大小</span></div>'
+      +'<div class="pd-k"><i>综合评级（1–5 标准化）</i><b>'+pdEsc(c.rating||'—')+'</b>'
+       +'<span class="pd-note">'+c.firms+' 家机构在有效期内</span></div>'
+      +'</div><div class="pd-dist">'
+      +[['买入',c.nBuy],['增持',c.nOut],['中性',c.nHold],['减持',c.nUnder],['卖出',c.nSell]]
+        .filter(function(x){ return x[1]>0; })
+        .map(function(x){ return '<span class="pd-tag '+pdRateCls(x[0])+'">'+x[0]+' '+x[1]+' 家</span>'; }).join('')
+      +((c.up||c.down)?('<span class="pd-updown">近一月评级 调高 '+c.up+' / 调低 '+c.down+'</span>'):'')
+      +'</div>';
+  }
+  hd+='</div>';
+  if(sum) sum.innerHTML=hd;
+  if(!rows.length){ document.getElementById('pdWrap').innerHTML='<div class="empty">近几个月没有机构给出 '+j.year+' 年度预测明细</div>'; return; }
+  pdTable();
+}
+function pdFmt(v){ return v==null?'—':Number(v).toFixed(2); }
+/* 切换 EPS / 净利润 / PE —— 只重绘表格，不重新请求（三个年度 × 三套数已经全在手里） */
+function pdMode(m){
+  PD.mode=m||'eps';
+  const md=document.getElementById('pdModes');
+  if(md) md.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-m')===PD.mode); });
+  pdTable();
+}
+function pdTable(){
+  const wrap=document.getElementById('pdWrap'); if(!wrap) return;
+  const rows=PD.rows||[], M=PD.mode||'eps', y=PD.year;
+  const ys=[y,y+1,y+2];
+  /* ⚠ 单位：Choice 的净利润是**万元** ⇒ 除 1e4 得亿元（茅台 8363600 万 = 836 亿）。
+     不除的话会显示成 8363600，量级离谱。 */
+  function cell(r,i){
+    const arr=M==='eps'?r.eps:(M==='np'?r.np:r.pe);
+    let v=Array.isArray(arr)?arr[i]:null;
+    if(v==null) return '—';
+    if(M==='np') return (v/10000).toFixed(1);
+    if(M==='pe') return Number(v).toFixed(1);
+    return Number(v).toFixed(2);
+  }
+  /* ⚠ 表头只写「年度+E」，单位放到脚注 —— 原来写「2026E EPS（元）」每列多占 ~50px，
+     九列一起就把表格顶出容器（实测 1320 宽下最后一列看不到）。 */
+  const unit=M==='eps'?'每股收益（元）':(M==='np'?'归母净利润（亿元）':'预测市盈率（倍）');
+  const head='<tr><th class="lft">机构</th><th class="lft">研究员</th><th>评级</th><th>方向</th>'
+    +'<th class="rt">研究日期</th>'
+    +ys.map(function(yy){ return '<th class="rt">'+yy+'E</th>'; }).join('')
+    +'</tr>';
+  const body=rows.map(function(r){
+    return '<tr>'
+      +'<td class="lft pd-firm">'+pdEsc(r.firm)+'</td>'
+      +'<td class="lft pd-rs">'+pdEsc(r.researcher||'—')+'</td>'
+      +'<td><span class="pd-tag '+pdRateCls(r.rating)+'">'+pdEsc(r.rating||'—')+'</span></td>'
+      +'<td><span class="pd-dir '+pdDirCls(r.direction)+'">'+pdEsc(r.direction||'—')+'</span></td>'
+      +'<td class="rt pd-date">'+pdEsc(r.date||'—')+'</td>'
+      +ys.map(function(yy,i){ return '<td class="rt">'+cell(r,i)+'</td>'; }).join('')
+      +'</tr>';
+  }).join('');
+  wrap.innerHTML='<div class="pd-tablewrap"><table class="pd-table"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
+    +'<div class="pd-foot">当前视图：<b>'+unit+'</b> ｜ 年份为预测年度（'+ys.join(' / ')+'）。'
+    +'按「研究日期」由新到旧，每家机构只显示<b>最新一次</b>观点（共 '+rows.length+' 家，'
+    +'原始 '+(PD.total||0)+' 条修订记录）。'
+    +'目标价为各机构预测值的算术平均，不是单一机构观点。数据源：东方财富 Choice · 盈利预测库</div>';
 }
 function mxChart(ser){
   const el=document.getElementById('mxChart'); if(!el) return;
