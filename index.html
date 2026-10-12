@@ -2558,6 +2558,9 @@ function afterLayoutChange(){
    · ⚠ AI **没有实时行情**：人格里已硬性要求它"拿不到数据就说拿不到、不许编"。
      以后若把站内数据（资金流/机构预测/宏观）当上下文喂进去，回答才会更贴。 */
 (function(){
+  /* ⚠⚠ 总开关 —— 2026-10-13 用户指出「AI 助手没让你上线你就上了」 ⇒ 先关掉。
+     改回 true 即上线；下面 bind() 会把按钮与面板整体从 DOM 摘掉。 */
+  const AI_UI_ON = false;
   const PROV={
     deepseek:{name:'DeepSeek', base:'https://api.deepseek.com', model:'deepseek-chat'}
   };
@@ -2731,6 +2734,21 @@ function afterLayoutChange(){
   }
   function bind(){
     const seg=$('railSeg');
+    /* ⚠ 关闭时**把按钮和面板从 DOM 里摘掉**，而不是只 display:none ——
+       右栏的 tab 切换会按 localStorage 的 `td_rail_tab` 恢复上次的页签，
+       若上次停在 'ai'，仅隐藏会被 `.on` 类重新点亮、露出一个空面板。
+       代码整段保留（AI_UI_ON 改回 true 即恢复），人格与逻辑一行没动。 */
+    if(!AI_UI_ON){
+      const b=seg&&seg.querySelector('button[data-r="ai"]'); if(b) b.remove();
+      const box=$('railAi'); if(box) box.remove();
+      /* 上次停在 AI 页签的话切回「聊天」——顺带把被收起的昵称行 / 日期选择器放出来 */
+      let lastTab=''; try{ lastTab=localStorage.getItem('td_rail_tab')||''; }catch(e){}
+      if(lastTab==='ai'&&seg){
+        try{ localStorage.setItem('td_rail_tab','chat'); }catch(e){}
+        const cb=seg.querySelector('button[data-r="chat"]'); if(cb) cb.click();
+      }
+      return;                                      /* 不绑任何 AI 事件 */
+    }
     if(seg) seg.querySelectorAll('button').forEach(function(b){
       if(b.dataset.r==='ai') b.addEventListener('click',initAi);
     });
