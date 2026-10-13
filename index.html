@@ -13,6 +13,16 @@
    --blue:#5fa8ff; --cyan:#39d9ff; --teal:#38d0c3; --green:#2bd67b;
    --red:#ff6f83; --amber:#ffb85c; --violet:#8c7dff;
    --shadow:0 18px 50px rgba(0,0,0,0.45); --radius:18px;
+   /* 固定栏宽度 —— 这里是**唯一真相源**：CSS 的 .rail / .sidebar 与 JS 的 layoutSync()
+      都从这几个变量取，改一处即可。
+      ⚠ 踩过（2026-10-13 用户截图发现）：JS 的 layoutSync 里曾单独写死 320（当时是对的），
+        后来 CSS 把右栏加宽到 392、JS 没跟着改 ⇒ 右栏展开时主内容区只让出 338px，
+        右边 54px 被压住：图表因为收到 resize 会自适应，静态 UI 却直接被盖住，
+        看起来就像"只有图缩了、界面没缩"。**别再写死数字。** */
+   --railW:392px;      /* 右栏展开宽 */
+   --railWmin:58px;    /* 右栏收起宽 */
+   --sideW:196px;      /* 左栏展开宽 */
+   --sideWmin:58px;    /* 左栏收起宽 */
  }
  *{box-sizing:border-box}
  body{
@@ -32,7 +42,7 @@
  /* 「夹层居中」：左右两侧留白等宽（= 侧栏 196 + 间距 18），内容永远居中在两侧留白之间。
     右侧留白就是将来的聊天/评论区位置——届时右栏宽度若不是 196，把 padding-right 改成
     「右栏宽 + 18」即可，居中逻辑不受影响（margin:0 auto + 左右 padding 对称）。 */
- .app{max-width:1720px;margin:0 auto;padding:26px 338px 40px 214px;position:relative;z-index:1}
+ .app{max-width:1720px;margin:0 auto;padding:26px calc(var(--railW) + 18px) 40px calc(var(--sideW) + 18px);position:relative;z-index:1}
 
  /* 顶部精简状态条（原 hero 横幅已删除：标题/描述/徽标与模块内信息重复） */
  .statusbar{display:flex;flex-wrap:wrap;gap:20px;align-items:center;
@@ -59,13 +69,13 @@
  .section{display:none}.section.active{display:block}
 
 /* 左侧模块选择栏：固定贴网页最左侧、上下顶满（100vh），收起时主区自动让位 */
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:196px;z-index:50;
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sideW);z-index:50;
   display:flex;flex-direction:column;gap:10px;padding:12px;
   border-right:1px solid var(--line);
   background:linear-gradient(180deg,rgba(56,60,66,.92),rgba(38,41,45,.92));
   box-shadow:var(--shadow);backdrop-filter:blur(12px);
   transition:width .2s ease,padding .2s ease}
-.sidebar.collapsed{width:58px;padding:12px 8px}
+.sidebar.collapsed{width:var(--sideWmin);padding:12px 8px}
 .main{flex:1 1 auto;min-width:0}
 .sb-top{display:flex;gap:8px;align-items:center}
 .sb-refresh{flex:1 1 auto;display:flex;align-items:center;justify-content:flex-start;gap:8px;
@@ -76,7 +86,7 @@
    所以切换左侧模块时它不会被隐藏、重绘或清空（聊天记录与评论草稿不会丢）。
    当前为静态骨架，功能未接线。将来接线点：
    ① 聊天 → WebSocket / 轮询；② 评论 → POST /v1/comments（先审后发）+ GET 列表。 */
-.rail{position:fixed;right:0;top:0;bottom:0;width:320px;z-index:40;
+.rail{position:fixed;right:0;top:0;bottom:0;width:var(--railW);z-index:40;
   display:flex;flex-direction:column;gap:10px;padding:12px;
   border-left:1px solid var(--line);
   background:linear-gradient(180deg,rgba(56,60,66,.92),rgba(38,41,45,.92));
@@ -114,18 +124,42 @@
    ⚠ .rail-scroll 自带 flex + gap:9px，所以 .ai-msg **不要再加 margin-bottom**，否则间距翻倍。 */
 .rail-note a{color:var(--amber,#ffb85c);text-decoration:none;margin-left:3px}
 .ai-cfg{display:flex;flex-direction:column;gap:5px;padding:9px 10px;margin:0 12px 8px;
+  max-height:56vh;overflow-y:auto;
   background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:10px}
 .ai-cfg label{font-size:11.5px;color:var(--muted)}
-.ai-cfg input,.ai-cfg select{width:100%;background:rgba(0,0,0,.25);color:var(--text);
-  border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:inherit;font-size:12.5px}
+  /* ⚠ 这条**必须排除 checkbox**：否则勾选框也会被拉成 width:100% 满宽、
+     还带上输入框的 padding → 整行被撑开、文字挤到右边只剩一个字（踩过，用户截图反馈）。 */
+  .ai-cfg input:not([type=checkbox]),.ai-cfg select{width:100%;background:rgba(0,0,0,.25);color:var(--text);
+    border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:inherit;font-size:12.5px}
 .ai-cfg-btns{display:flex;gap:6px;margin-top:3px}
 .ai-cfg-btns button{flex:1;background:transparent;color:var(--text);border:1px solid var(--line);
   border-radius:7px;padding:5px 8px;font:inherit;font-size:12px;cursor:pointer}
 .ai-cfg-btns button:hover{border-color:rgba(95,168,255,.55)}
 .ai-cfg-tip{font-size:11px;color:var(--muted);line-height:1.65;margin-top:2px}
+.ai-cfg .ai-ck{display:flex;align-items:flex-start;gap:7px;font-size:12.5px;color:var(--text);
+  line-height:1.6;margin:1px 0;cursor:pointer;user-select:none}
+.ai-cfg .ai-ck input{width:auto;height:auto;padding:0;margin:4px 0 0;flex:0 0 auto;
+  cursor:pointer;accent-color:#5fa8ff}
+.ai-mem{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:11px;color:var(--muted);padding:0 2px 6px;margin-bottom:5px;border-bottom:1px solid var(--line)}
+.ai-mem b{color:var(--text)}
+.ai-mem a{color:var(--muted);text-decoration:none;border-bottom:1px dashed var(--line);cursor:pointer}
+.ai-mem a:hover{color:var(--text);border-bottom-color:var(--text)}
 .ai-msg .ai-who{font-size:11px;color:var(--muted);margin-bottom:3px}
 .ai-msg .ai-body{padding:7px 10px;border-radius:10px;font-size:12.8px;line-height:1.72;
   word-break:break-word;overflow-wrap:anywhere}
+/* 长回答默认折叠：超阈值给一层渐隐 + 下方「展开全文」（用户要的） */
+.ai-msg .ai-body.clip{max-height:300px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(180deg,#000 60%,rgba(0,0,0,.06));
+  mask-image:linear-gradient(180deg,#000 60%,rgba(0,0,0,.06))}
+.ai-more{display:inline-block;margin:3px 0 1px;font-size:11.5px;color:var(--blue);
+  text-decoration:none;cursor:pointer;border-bottom:1px dashed rgba(95,168,255,.45)}
+.ai-more:hover{opacity:.82}
+/* 「正在查数据…」这类过程提示 */
+.ai-tool{color:var(--muted);font-size:12px;font-style:normal}
+/* AI 回复里的 markdown 表格/分隔线：单文件不引第三方库，这里只保证不"炸版" */
+.ai-msg .ai-body table{border-collapse:collapse;font-size:12px;margin:4px 0;width:100%}
+.ai-msg .ai-body td,.ai-msg .ai-body th{border:1px solid var(--line);padding:3px 6px;text-align:left}
 /* 我=蓝边、AI=灰边 —— 长回答里比"靠左靠右"更好读 */
 .ai-msg.me .ai-body{background:rgba(95,168,255,.13);border:1px solid rgba(95,168,255,.28)}
 .ai-msg.bot .ai-body{background:rgba(255,255,255,.045);border:1px solid var(--line)}
@@ -163,7 +197,7 @@
 .rail-toggle:hover{background:rgba(255,255,255,.13)}
 .rail.collapsed .rail-head{justify-content:flex-end}
 .rail.collapsed .rail-toggle{flex:1 1 auto;width:auto}
-.rail.collapsed{width:58px;padding:12px 8px}
+.rail.collapsed{width:var(--railWmin);padding:12px 8px}
 .rail.collapsed .rail-seg,.rail.collapsed .rail-tag,.rail.collapsed .rail-box,
 .rail.collapsed .rail-cal,.rail.collapsed .rail-mine{display:none}
 /* 日期框可能带着内联 display:block（点开过 📅 再收起），必须 !important 才压得住 */
@@ -1731,19 +1765,43 @@
      本站不代付、不转发、<b>不会保存你的 Key</b>。<a href="javascript:;" id="aiCfgBtn">⚙ 设置</a></div>
     <div class="ai-cfg" id="aiCfg" style="display:none">
      <label>服务商</label>
-     <select id="aiProv"><option value="deepseek">DeepSeek 官方 API</option></select>
+     <select id="aiProv"></select>
      <label>API Key</label>
      <input id="aiKey" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false">
      <label>模型</label>
-     <input id="aiModel" placeholder="deepseek-chat" autocomplete="off" spellcheck="false" list="aiModelList">
-     <datalist id="aiModelList"><option value="deepseek-chat"></option><option value="deepseek-reasoner"></option></datalist>
+     <select id="aiModelSel"></select>
+     <input id="aiModel" placeholder="填服务商文档里的模型名" autocomplete="off" spellcheck="false" style="display:none">
+     <label class="ai-ck"><input type="checkbox" id="aiCtxOn" checked> 允许 AI 读你当前看板</label>
+     <label>联网搜索（可选 · 留空则不启用）</label>
+     <select id="aiSearchProv"></select>
+     <input id="aiSearchKey" type="password" placeholder="搜索服务的 API Key" autocomplete="off" spellcheck="false">
+     <div class="ai-cfg-tip">填了之后，AI 遇到"最新消息 / 政策 / 公告 / 研报观点"这类时效问题会<b>自己上网查</b>再回答。
+       这里同样用<b>你自己的 Key</b>（上面那个是给对话模型用的，这个是给搜索用的，是两回事）。<br>
+       去哪拿（都有免费额度，够个人用）：<br>
+       · <b>Tavily</b>：tavily.com —— 每月免费 1000 次，最省事，<b>推荐</b><br>
+       · <b>Serper</b>：serper.dev —— 注册送 2500 次（返回 Google 搜索结果）<br>
+       · <b>Brave</b>：api.search.brave.com —— 每月 5 美元额度（约 1000 次），但注册要绑卡</div>
+     <div class="ai-cfg-tip">AI 有工具可以查<b>大盘 / 板块资金流 / 消息面 / 机构预测 / 宏观 / 网页</b>，
+       <b>它需要时才会去查</b>（不是每轮都塞）。勾上这里只是额外允许它读你<b>当前正在看的那一页</b>——
+       你问"这个怎么看"时它才用得上。关掉可省一点 token。</div>
+     <div class="ai-cfg-btns">
+      <button id="aiFetchBtn" type="button">↻ 拉取可用模型</button>
+     </div>
+     <div class="ai-cfg-tip" id="aiFetchTip" style="display:none"></div>
      <div class="ai-cfg-btns">
       <button id="aiSaveBtn">保存</button>
       <button id="aiClearBtn">清除 Key</button>
      </div>
-     <div class="ai-cfg-tip">Key 只存在<b>你这台设备的浏览器</b>里，请求直接发往服务商，不经过本站服务器。
+     <div class="ai-cfg-tip">⚠ <b>模型名官方说改就改</b>（例：DeepSeek 的 deepseek-chat 已停用、
+       改名 deepseek-flash）→ 填好 Key 后点上面的「↻ 拉取可用模型」，拿到的才是当下真能用的名单。<br>
+       要用 <b>GPT / Gemini</b> 请选 <b>OpenRouter</b>（一个 Key 覆盖全部海外模型）；
+       <b>Claude</b> 可选 Anthropic 官方，也可走 OpenRouter。</div>
+     <div class="ai-cfg-tip">Key 只存在<b>你这台设备的浏览器</b>里，请求经本站转发到你选的模型服务商
+       （我们的服务器只注入分析框架，<b>不保存你的 Key、不代付费用</b>）。
       共用的电脑请用完点「清除 Key」。建议用<b>设了消费上限</b>的子 Key。</div>
     </div>
+    <div class="ai-mem"><span id="aiMemTxt">尚无记忆</span>
+     <a href="javascript:;" id="aiMemClear" title="清空本机保存的对话与摘要">清空记忆</a></div>
     <div class="rail-scroll" id="aiScroll"></div>
     <div class="rail-input">
      <input id="aiInput" placeholder="问点什么…（Enter 发送）">
@@ -2454,6 +2512,17 @@ document.getElementById("refreshBtn").onclick=()=>{
 /* 主区留白同步：左留白 = 左栏宽 + 18，右留白 = 右栏宽 + 18（右栏在窄屏隐藏时按左栏宽算）。
    两侧间距始终相等 ⇒ 任一栏收起/展开后，内容都居中在两栏之间，不会偏向一侧。
    ≤900px 两栏都不占位，交回媒体查询的 !important 规则。 */
+/* 从 CSS 变量取栏宽 —— 唯一真相源，这里**绝不再写死数字**。
+   ⚠ 踩过（2026-10-13 用户截图发现）：这里原来写死 320，而 CSS 的 --railW 后来改成 392 却没同步
+     ⇒ 右栏展开时主内容区只让出 338px，右边 54px 被右栏压住。
+     现象很有迷惑性：图表收到 resize 会自适应，静态 UI 却被直接盖住，
+     看起来就是"只有 K 线缩了、界面没缩"。 */
+function cssPx(nm, fb){
+  try{
+    const n=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(nm));
+    return isNaN(n)?fb:n;
+  }catch(e){ return fb; }
+}
 function layoutSync(){
   const app=document.querySelector(".app"); if(!app) return;
   const w=window.innerWidth;
@@ -2462,8 +2531,9 @@ function layoutSync(){
   const sbCol=!!(sb&&sb.classList.contains("collapsed"));
   const rlCol=!!(rail&&rail.classList.contains("collapsed"));
   const railShown = w>1200;
-  app.style.paddingLeft  = ((sbCol?58:196)+18)+"px";
-  app.style.paddingRight = ((railShown ? (rlCol?58:320) : 196)+18)+"px";
+  const barW = cssPx("--sideW",196);        /* 右栏不显示时（901~1200），右侧留白与左栏等宽，内容才居中 */
+  app.style.paddingLeft  = (sbCol?cssPx("--sideWmin",58):barW)+18+"px";
+  app.style.paddingRight = ((railShown ? (rlCol?cssPx("--railWmin",58):cssPx("--railW",392)) : barW)+18)+"px";
 }
 /* 栏宽变化后：让图表按新宽度重排，并按当前模块重绘 */
 function afterLayoutChange(){
@@ -2560,13 +2630,57 @@ function afterLayoutChange(){
 (function(){
   /* ⚠⚠ 总开关 —— 2026-10-13 用户指出「AI 助手没让你上线你就上了」 ⇒ 先关掉。
      改回 true 即上线；下面 bind() 会把按钮与面板整体从 DOM 摘掉。 */
-  const AI_UI_ON = false;
+  const AI_UI_ON = true;
+  /* 本站 API 网关：请求统一发给它，由 Worker 注入人格后再转发到各家服务商。
+     ⚠ 前端**不能**直连服务商 —— 人格（AI_PERSONA）在服务端，直连就拿不到人格了。 */
+  const AI_API='https://api.conglingkaishi3674.com';
+  /* 服务商白名单，**必须与 Worker 的 AI_UPSTREAM 一一对应**（改一处要同步另一处）。
+     ⚠⚠ 模型名**变得非常快**（实例：DeepSeek 的 deepseek-chat/reasoner 已于 2026-07-24 停用，
+        改名 deepseek-flash；Kimi 的 moonshot-v1 系列 2026-08-31 停用，改名 kimi-k3）——
+        所以下面的预置列表**只是兜底**，打开设置时会自动向服务商拉一份真实列表覆盖它。
+     ⚠ 海外三家实测（经 Cloudflare 出口）：
+        · Anthropic 官方 → ✅ 通（401 = 只需真 key）；
+        · OpenAI 官方   → ❌ 403 unsupported_country_region_territory（地区封锁，故不列出）；
+        · OpenRouter    → ✅ 通，459 个模型，**GPT / Gemini 走它**。 */
   const PROV={
-    deepseek:{name:'DeepSeek', base:'https://api.deepseek.com', model:'deepseek-chat'}
+    deepseek:{name:'DeepSeek 官方', model:'deepseek-flash',
+      models:['deepseek-flash','deepseek-v4-pro']},
+    moonshot:{name:'月之暗面 Kimi', model:'kimi-k3',
+      models:['kimi-k3','kimi-k2.6','kimi-k2.7-code']},
+    qwen:{name:'阿里通义千问', model:'qwen-plus',
+      models:['qwen-plus','qwen-max','qwen-flash']},
+    zhipu:{name:'智谱 GLM', model:'',
+      models:[]},
+    siliconflow:{name:'硅基流动', model:'',
+      models:[]},
+    anthropic:{name:'Anthropic Claude', model:'claude-sonnet-4-6',
+      models:['claude-sonnet-4-6','claude-opus-4-6']},
+    openrouter:{name:'OpenRouter（含 GPT · Claude · Gemini）', model:'',
+      models:['openai/gpt-6.1-sol','anthropic/claude-sonnet-5.5','google/gemini-3.8-flash','x-ai/grok-4.7']}
+  };
+  /* 联网搜索服务（可选）—— Key 由用户自己填，本站不代付。
+     三家都带免费额度，够个人用：Tavily 1000 次/月、Serper 注册送 2500 次、
+     Brave 每月 5 美元额度（约 1000 次，注册需绑卡）。
+     ⚠ key 名要与 Worker 的 AI_SEARCH_UP 对齐。 */
+  const SEARCH_PROV={
+    tavily:{name:'Tavily（推荐 · 免费 1000 次/月）'},
+    serper:{name:'Serper（Google 结果 · 送 2500 次）'},
+    brave:{name:'Brave（免费额度约 1000 次/月）'}
   };
   const STORE='td_ai_cfg';
-  const CTX_TURNS=12;                       /* 只带最近 12 轮，控制 token 开销 */
-  const AI={prov:'deepseek', key:'', model:'deepseek-chat', msgs:[], busy:false, cfgOpen:false, inited:false};
+  const CTX_TURNS=12;                       /* 每次发送只带最近 12 轮**原文**，控制 token 开销 */
+  /* 更早的对话**不丢**，而是压缩成摘要 —— 否则 AI 只记得最近 12 轮、再往前的全忘。
+     注意发送量本来就封顶在 12 轮（AI.msgs 会裁），所以摘要不是为省 token，
+     而是**为了让 AI 别忘事**：把它压成要点随每轮带上。
+     ⚠ 门槛不能设太高：设 8（4 轮）时，第 13~15 轮会出现"AI 忘掉最早几轮"的空窗
+       —— 摘要要等到第 16 轮才第一次生成。改成 4（2 轮）后空窗缩到 1 轮，
+       而成本只多约 15%（一次压缩约 2 千 token，相对两轮对话本身很小）。 */
+  const MEMO_EVERY=4;                       /* 攒够 4 条（2 轮）压一次 */
+  const HIST_MAX=4000;                      /* 本机最多留 4000 条，防 localStorage 撑爆 */
+  const HIST_KEY='td_ai_hist', MEMO_KEY='td_ai_memo';
+  const AI={prov:'deepseek', key:'', model:'deepseek-flash', msgs:[], busy:false, cfgOpen:false, inited:false, fetched:{}, ctxOn:true,
+    hist:[], memo:'', memoUpto:0, memoBusy:false,
+    searchProv:'tavily', searchKey:''};     /* 联网搜索：Key 同样是用户自己的，留空=不启用 */
   const $=function(id){ return document.getElementById(id); };
   const esc=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
   /* 极简 markdown（粗体 / 换行 / 圆点列表）—— 页面是单文件，不引第三方库 */
@@ -2585,26 +2699,327 @@ function afterLayoutChange(){
       if(j.prov&&PROV[j.prov]) AI.prov=j.prov;
       if(j.key) AI.key=String(j.key);
       if(j.model) AI.model=String(j.model);
+      if(typeof j.ctx==='boolean') AI.ctxOn=j.ctx;
+      if(j.searchProv&&SEARCH_PROV[j.searchProv]) AI.searchProv=j.searchProv;
+      if(j.searchKey) AI.searchKey=String(j.searchKey);
     }catch(e){}
   }
-  function saveCfg(){ try{ localStorage.setItem(STORE,JSON.stringify({prov:AI.prov,key:AI.key,model:AI.model})); }catch(e){} }
-  function syncCfgUI(){
-    const p=$('aiProv'), k=$('aiKey'), m=$('aiModel');
-    if(p) p.value=AI.prov; if(k) k.value=AI.key; if(m) m.value=AI.model;
+  function saveCfg(){ try{ localStorage.setItem(STORE,JSON.stringify({prov:AI.prov,key:AI.key,model:AI.model,ctx:!!AI.ctxOn,
+    searchProv:AI.searchProv,searchKey:AI.searchKey})); }catch(e){} }
+  /* 服务商下拉 —— 由 PROV 生成，免得 HTML 与常量两处维护 */
+  function fillProv(){
+    const p=$('aiProv'); if(!p) return;
+    p.innerHTML=Object.keys(PROV).map(function(k){
+      return '<option value="'+k+'">'+esc(PROV[k].name)+'</option>';
+    }).join('');
+    p.value=AI.prov;
   }
+  /* 搜索服务商下拉 —— 与 AI 服务商同一个套路（由常量生成，免得 HTML 与 JS 两处维护） */
+  function fillSearchProv(){
+    const p=$('aiSearchProv'); if(!p) return;
+    p.innerHTML=Object.keys(SEARCH_PROV).map(function(k){
+      return '<option value="'+k+'">'+esc(SEARCH_PROV[k].name)+'</option>';
+    }).join('');
+    p.value=AI.searchProv;
+  }
+  /* 模型下拉 —— 跟着服务商变；AI.model 不在列表里时自动落「自定义」并回填输入框。
+     ⚠ 预置列表只做兜底：模型名官方说改就改，真实列表由 fetchModels() 拉。 */
+  function fillModel(list){
+    const s=$('aiModelSel'), mi=$('aiModel'); if(!s) return;
+    const L=(list&&list.length)?list:((PROV[AI.prov]||{}).models||[]);
+    s.innerHTML = L.length
+      ? (L.map(function(m){ return '<option value="'+esc(m)+'">'+esc(m)+'</option>'; }).join('')
+        + '<option value="__custom">自定义（手动填模型名）…</option>')
+      : '<option value="__custom">先点下面「↻ 拉取可用模型」</option>';
+    if(AI.model&&L.indexOf(AI.model)>=0){ s.value=AI.model; if(mi){ mi.style.display='none'; mi.value=''; } }
+    else{ s.value='__custom'; if(mi){ mi.style.display=''; mi.value=AI.model||''; } }
+  }
+  function syncCfgUI(){
+    const k=$('aiKey'), c=$('aiCtxOn'), sk=$('aiSearchKey');
+    fillProv();
+    fillSearchProv();
+    if(k) k.value=AI.key;
+    if(c) c.checked=!!AI.ctxOn;
+    if(sk) sk.value=AI.searchKey;
+    fillModel();
+  }
+  /* ============ 当前看板数据：把用户屏幕上正在看的内容附给 AI ============
+     为什么采集 DOM 可见文本、而不是去读各模块的内部变量：
+       主区有 8 个页面、数据板块还有 8 个子页签，逐个对接内部状态要写十几处，
+       而且以后每加一个模块都得再改一遍。采集"当前激活区块的可见文本"一套通吃，
+       而且永远和用户屏幕上看到的一致 —— 这才是「当前看板」的本意。
+     ⚠ 必须跳过 display:none：数据板块里没显示的子页签内容也在 DOM 里，
+       不跳过会白烧用户自己的 token。 */
+  function aiDumpText(root, maxLen){
+    const parts=[]; let n=0;
+    (function walk(el){
+      if(n>maxLen) return;
+      if(el.nodeType===1){
+        const tag=el.tagName;
+        if(tag==='SCRIPT'||tag==='STYLE'||tag==='NOSCRIPT'||tag==='BUTTON'||tag==='SELECT'||tag==='INPUT'||tag==='TEXTAREA') return;
+        let st=null; try{ st=getComputedStyle(el); }catch(e){}
+        if(st&&(st.display==='none'||st.visibility==='hidden')) return;
+        const cell=(tag==='TD'||tag==='TH');
+        if(cell){ parts.push(' | '); n+=3; }
+        const kids=el.childNodes;
+        for(let i=0;i<kids.length;i++) walk(kids[i]);
+        if(tag==='TR'||tag==='H2'||tag==='H3'||tag==='H4'||tag==='P'||tag==='LI'||tag==='BR'){ parts.push('\n'); n+=1; }
+        return;
+      }
+      if(el.nodeType===3){
+        const t=String(el.nodeValue||'').replace(/\s+/g,' ').trim();
+        if(t){ parts.push(t+' '); n+=t.length+1; }
+      }
+    })(root);
+    return parts.join('')
+      .replace(/[ \t]*\n[ \t]*/g,'\n')
+      .replace(/^[ \t]*\|[ \t]*/gm,'')
+      .replace(/\n{3,}/g,'\n\n')
+      .trim()
+      .slice(0,maxLen);
+  }
+  /* AI 面板在右栏，和主区页签是**互相独立**的 —— 所以"当前看板"= 主区那个 .section.active */
+  function aiCtx(){
+    if(!AI.ctxOn) return '';
+    const sec=document.querySelector('.section.active');
+    if(!sec) return '';
+    const h=sec.querySelector('h2');
+    const head=h?String(h.textContent||'').trim():'';
+    let body=aiDumpText(sec, 4500);
+    if(!body) return '';
+    /* 区块的正文开头就是那个 h2，别再重复列一遍（白烧 token） */
+    if(head&&body.indexOf(head)===0) body=body.slice(head.length).replace(/^[\s|]+/,'');
+    return '【'+(head||'当前页面')+'】\n'+body;
+  }
+  /* ============ 工具执行器：AI 自己决定查什么 ============
+     用户要的「别每轮硬塞屏幕、问了再去查」就是靠这套。
+     执行放在**前端**：数据接口本来就在我们自己的 Worker 上，前端直接调最省事，
+     也不用把订阅票交给服务端。每个工具返回**给模型看的纯文本**，所以要精简。 */
+  async function toolJson(path,label){
+    const r=await fetch(AI_API+path,{cache:'no-store'});
+    const j=await r.json();
+    if(!j||j.ok===false) throw new Error(label+'查询失败：'+String((j&&(j.msg||j.error))||('HTTP '+r.status)).slice(0,90));
+    return j;
+  }
+  const AI_RUN={
+    /* 读当前屏幕 —— 用户说"这个 / 上面"时才该被调用 */
+    read_screen: async function(){ return aiCtx()||'（当前页面没有可读的内容）'; },
+    market_overview: async function(){
+      const j=await toolJson('/v1/mkt/overview','大盘数据');
+      const rows=(j.turnover||[]).slice(-6).map(function(x){
+        return x[0]+'：沪 '+x[1]+' 亿 · 深 '+x[2]+' 亿 · 两市 '+x[3]+' 亿';
+      });
+      return '数据日 '+j.last+'\n最近成交额：\n'+rows.join('\n');
+    },
+    sector_flow: async function(a){
+      const top=Math.min(20,Math.max(4,(+((a||{}).top)||8)));
+      const j=await toolJson('/v1/sector/overview?min=1','板块资金流');
+      const all=(j.list||[]).slice().sort(function(x,y){ return (y.net||0)-(x.net||0); });
+      const one=function(x){ return x.name+'：涨跌 '+x.pct+'%，主力净'+(x.net>0?'+':'')+x.net+' 亿，成交 '+x.amount+' 亿'; };
+      return '数据日 '+j.last+'（共 '+j.total+' 个板块）\n【最强流入】\n'
+        +all.slice(0,top).map(one).join('\n')
+        +'\n【最强流出】\n'+all.slice(-top).reverse().map(one).join('\n');
+    },
+    news: async function(a){
+      const n=Math.min(30,Math.max(5,(+((a||{}).n)||15)));
+      const j=await toolJson('/v1/news?n='+n,'消息面');
+      const L=(j.items||[]).map(function(x,i){
+        return (i+1)+'. ['+String(x.at||'').slice(5,16)+'] '+String(x.ti||'').slice(0,60)
+          +' — '+String(x.x||'').replace(/\s+/g,' ').slice(0,160);
+      });
+      return L.length?L.join('\n'):'（暂无消息）';
+    },
+    stock_prediction: async function(a){
+      const code=String(((a||{}).code)||'').replace(/\D/g,'').slice(0,6);
+      if(code.length!==6) return '股票代码不合法（要 6 位数字）';
+      let tkq='';
+      /* ⚠ SUB 在别的模块里，可能有 TDZ / 不存在 —— 一律 try 住 */
+      try{ if(typeof SUB!=='undefined'&&SUB.tk) tkq='&tk='+encodeURIComponent(SUB.tk)+'&did='+encodeURIComponent(SUB.did||''); }catch(e){}
+      const j=await toolJson('/v1/choice/pred/stock?code='+code+tkq,'机构预测');
+      const c=j.consensus||{};
+      const head=[(j.name||'')+'('+(j.code||code)+')',
+        '一致目标价 '+(c.target!=null?c.target:'—')+'（区间 '+(c.targetMin!=null?c.targetMin:'—')
+          +'~'+(c.targetMax!=null?c.targetMax:'—')+'）',
+        '综合评级 '+(c.rating||'—')+' · '+(c.firms||0)+' 家机构',
+        '覆盖年度 '+((j.years||[]).join('/')||'—')];
+      const rows=(j.rows||[]).slice(0,20).map(function(r){
+        /* ⚠ 接口给的归母净利润是**万元**（茅台 8363600 ⇒ 836.36 亿），这里换成亿元 */
+        const np=(r.np||[]).map(function(v){ return v==null?null:Math.round(v/100)/100; });
+        return r.firm+' | '+(r.rating||'-')+' | '+(r.direction||'-')+' | '+r.date
+          +' | EPS '+JSON.stringify(r.eps||[])+' | 净利(亿) '+JSON.stringify(np);
+      });
+      return head.join('\n')+'\n各机构（前 20 家）：\n'+rows.join('\n');
+    },
+    macro: async function(a){
+      const q=String(((a||{}).query)||'').trim().slice(0,30);
+      if(!q) return '请给出指标关键词';
+      const s=await toolJson('/v1/choice/macro/search?n=3&q='+encodeURIComponent(q),'宏观检索');
+      const hit=(s.list||[])[0];
+      if(!hit) return '没找到匹配「'+q+'」的宏观指标，换个词试试（如 制造业PMI / 社融 / M2）';
+      const j=await toolJson('/v1/choice/macro/series?id='+encodeURIComponent(hit.id)+'&years=5','宏观序列');
+      return hit.name+'（单位 '+(hit.unit||'-')+'，来源 '+(hit.src||'-')+'）近 '+(j.n||0)+' 期：\n'
+        +(j.series||[]).map(function(p){ return p[0]+'  '+p[1]; }).join('\n');
+    },
+    web_search: async function(a){
+      const q=String(((a||{}).q)||'').trim();
+      if(!q) return '搜索词是空的，请重新给一个关键词。';
+      /* 没填搜索 Key 时，把话说给模型听 —— 让它转告用户去哪开，
+         而不是让它在工具里干等（也避免它去"编"搜到的内容）。 */
+      if(!AI.searchKey)
+        return '未配置联网搜索。请告诉用户：去 ⚙ 设置 里填一个搜索服务的 Key'
+          +'（推荐 Tavily，每月免费 1000 次；也可用 Serper / Brave），填好我就能联网查了。'
+          +'在用户配置之前，先用站内工具（消息面 / 机构预测 / 宏观）回答，查不到就直说查不到。';
+      const fr=String(((a||{}).fresh)||'').trim().toLowerCase();
+      let u=AI_API+'/v1/ai/search?prov='+encodeURIComponent(AI.searchProv)
+        +'&q='+encodeURIComponent(q.slice(0,200))+'&n=5';
+      if(fr==='day'||fr==='week'||fr==='month') u+='&fresh='+fr;
+      const r=await fetch(u,{headers:{'X-Search-Key':AI.searchKey},cache:'no-store'});
+      const j=await r.json();
+      if(!j||!j.ok) return '搜索失败：'+String((j&&(j.msg||j.error))||('HTTP '+r.status)).slice(0,140);
+      const rs=j.results||[];
+      if(!rs.length) return '没搜到结果（换个关键词或去掉时间限制再试）。';
+      let out='';
+      if(j.answer) out+='【搜索摘要】'+j.answer+'\n\n';
+      out+=rs.map(function(x,i){
+        return (i+1)+'. '+x.title+'\n   '+x.url+'\n   '+x.desc;
+      }).join('\n');
+      return out.slice(0,6000);
+    },
+    web_fetch: async function(a){
+      const u=String(((a||{}).url)||'').trim();
+      if(!/^https?:\/\//i.test(u)) return '网址必须以 http:// 或 https:// 开头';
+      const r=await fetch(AI_API+'/v1/ai/fetch?url='+encodeURIComponent(u),
+        {headers:{'X-AI-Key':AI.key},cache:'no-store'});
+      const j=await r.json();
+      if(!j||!j.ok) return '抓取失败：'+String((j&&(j.msg||j.error))||('HTTP '+r.status)).slice(0,100);
+      return '《'+(j.title||u)+'》正文节选：\n'+String(j.text||'').slice(0,5000);
+    }
+  };
+  /* 发一轮：流式渲染进 body，同时累积 tool_calls。
+     返回 {text, tools} 或 {err} / {blocked}。 */
+  async function aiRound(msgs,body,useTools){
+    let acc='';
+    const slots=[];
+    const r=await fetch(AI_API+'/v1/ai/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-AI-Key':AI.key},
+      body:JSON.stringify({ prov:AI.prov, model:AI.model, messages:msgs,
+        memo:AI.memo, tools:useTools!==false, search:!!AI.searchKey })
+    });
+    const ct=(r.headers.get('content-type')||'');
+    /* 服务端会回两种：JSON（被拦/报错）或 SSE 流。先按 content-type 分流 ——
+       否则拿 JSON 当 SSE 解析，会得到一片沉默的空白（只有光标在闪）。 */
+    if(ct.indexOf('application/json')>=0){
+      let j={}; try{ j=await r.json(); }catch(e){}
+      if(j&&j.error==='blocked') return {blocked:true,msg:j.msg};
+      const raw=String((j&&(j.msg||j.error))||'');
+      return {err:hint(r.status,raw||('HTTP '+r.status)),status:r.status,raw:raw};
+    }
+    if(!r.ok) return {err:'HTTP '+r.status,status:r.status,raw:''};
+    const rd=r.body.getReader(), dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const st=await rd.read(); if(st.done) break;
+      buf+=dec.decode(st.value,{stream:true});
+      const parts=buf.split('\n'); buf=parts.pop();
+      for(let i=0;i<parts.length;i++){
+        const line=parts[i].trim();
+        if(line.indexOf('data:')!==0) continue;
+        const pay=line.slice(5).trim();
+        if(pay==='[DONE]') continue;
+        let j=null; try{ j=JSON.parse(pay); }catch(e){ continue; }
+        const d=j.choices&&j.choices[0]&&j.choices[0].delta;
+        if(!d) continue;
+        if(d.content){ acc+=d.content; if(body){ body.innerHTML=fmt(acc); scrollEnd(); } }
+        /* 工具调用是**增量**下发的：id/name 一次给全，arguments 分片拼 */
+        if(d.tool_calls){
+          d.tool_calls.forEach(function(tc){
+            const ix=(tc.index==null?0:tc.index);
+            const slot=slots[ix]||(slots[ix]={id:'',name:'',args:''});
+            if(tc.id) slot.id=tc.id;
+            if(tc.function){
+              if(tc.function.name) slot.name=tc.function.name;
+              if(tc.function.arguments) slot.args+=tc.function.arguments;
+            }
+          });
+        }
+      }
+    }
+    return {text:acc, tools:slots.filter(Boolean)};
+  }
+
   function openCfg(on){
     AI.cfgOpen=!!on;
     const c=$('aiCfg'); if(c) c.style.display=on?'':'none';
-    if(on){ syncCfgUI(); const k=$('aiKey'); if(k) k.focus(); }
+    if(on){ syncCfgUI(); const k=$('aiKey'); if(k) k.focus(); autoFetch(); }
+  }
+  /* 向服务商拉真实可用的模型列表（各家的 GET /models，经我们 Worker 转发）。
+     ⚠ 这是**唯一可靠**的取模型名方式 —— 官方说改名就改名（DeepSeek 2026-07 停用
+        deepseek-chat、Kimi 2026-08 停用 moonshot-v1 都是实例），硬编码早晚过时。
+     quiet=true 用于"打开设置顺手拉一次"，失败不打扰用户。 */
+  async function fetchModels(quiet){
+    const tip=$('aiFetchTip'), fb=$('aiFetchBtn');
+    const setTip=function(h){ if(tip){ tip.style.display=''; tip.innerHTML=h; } };
+    const key=((($('aiKey')||{}).value)||AI.key||'').trim();
+    if(!key){ if(!quiet) setTip('请先填 API Key，再拉取。'); return false; }
+    if(fb) fb.disabled=true;
+    if(!quiet) setTip('正在拉取…');
+    AI.fetched[AI.prov]=1;                    /* 无论成败都标记，免得打开设置时反复自动请求 */
+    try{
+      const r=await fetch(AI_API+'/v1/ai/models?prov='+encodeURIComponent(AI.prov),{headers:{'X-AI-Key':key}});
+      const j=await r.json();
+      if(j&&j.ok&&(j.models||[]).length){
+        const stale=!!(AI.model&&j.models.indexOf(AI.model)<0);
+        fillModel(j.models);
+        setTip('已从服务商拉到 <b>'+j.models.length+'</b> 个可用模型。'
+          +(stale?('<br>⚠ 你原来填的 <b>'+esc(AI.model)+'</b> 不在列表里、可能已改名 —— 请从上面重选一个。'):''));
+        return true;
+      }
+      if(!quiet) setTip('没拉到列表：'+esc(String((j&&j.msg)||'该服务商可能不开放模型列表')).slice(0,110)
+        +'<br>请到服务商文档把当前模型名填进「自定义」。');
+      return false;
+    }catch(e){
+      if(!quiet) setTip('拉取失败：'+esc(String((e&&e.message)||e).slice(0,90)));
+      return false;
+    }finally{ if(fb) fb.disabled=false; }
+  }
+  function autoFetch(){
+    if(!AI.key) return;
+    if(AI.fetched[AI.prov]) return;
+    fetchModels(true);
   }
   function scrollEnd(){ const b=$('aiScroll'); if(b) b.scrollTop=b.scrollHeight; }
   function bubble(role,text){
     const box=$('aiScroll'); if(!box) return null;
     const d=document.createElement('div');
     d.className='ai-msg '+(role==='user'?'me':'bot');
-    d.innerHTML='<div class="ai-who">'+(role==='user'?'我':'chatgyd')+'</div><div class="ai-body">'+fmt(text)+'</div>';
+    d.innerHTML='<div class="ai-who">'+(role==='user'?'我':'chat從零开始')+'</div><div class="ai-body">'+fmt(text)+'</div>';
     box.appendChild(d); scrollEnd();
     return d.querySelector('.ai-body');
+  }
+  /* 长回答默认折叠（用户要的）：渲染完量高度，超阈值就给一层渐隐 + 「展开全文」。
+     ⚠ 必须在渲染之后量，否则 scrollHeight 还是 0 —— 用 rAF，测试环境没有 rAF 时退回 setTimeout。 */
+  function foldIfLong(el){
+    if(!el||el.__folded) return;
+    const H=300;
+    const run=function(){
+      if(el.__folded) return;
+      if(el.scrollHeight<=H+50) return;
+      el.__folded=1;
+      el.classList.add('clip'); el.style.maxHeight=H+'px';
+      const a=document.createElement('a');
+      a.className='ai-more'; a.href='javascript:;'; a.textContent='展开全文 ▾';
+      a.onclick=function(){
+        const on=el.classList.contains('clip');
+        el.classList.toggle('clip',!on);
+        el.style.maxHeight=on?'':(H+'px');
+        a.textContent=on?'收起 ▴':'展开全文 ▾';
+        scrollEnd();
+      };
+      if(el.parentNode) el.parentNode.insertBefore(a, el.nextSibling);
+    };
+    if(typeof requestAnimationFrame==='function') requestAnimationFrame(run);
+    else setTimeout(run,0);
   }
   function sysNote(html){
     const box=$('aiScroll'); if(!box) return;
@@ -2616,6 +3031,78 @@ function afterLayoutChange(){
     const btn=$('aiSend'), inp=$('aiInput');
     if(btn){ btn.disabled=b; btn.textContent=b?'…':'问'; }
     if(inp) inp.disabled=b;
+  }
+  /* ============ 本机对话记忆：存全部 + 发送时压缩 ============
+     和"每人专属记忆"的区别：这是**每设备**的 —— 换设备 / 清缓存就没了。
+     之所以不存服务器：用户问的可能是自己的持仓和想法，存进我们库里就是隐私责任，
+     而"跨设备同步"这点收益不值得付这个代价。 */
+  function loadHist(){
+    try{
+      const h=JSON.parse(localStorage.getItem(HIST_KEY)||'[]');
+      if(Array.isArray(h)) AI.hist=h.filter(function(m){ return m&&(m.r==='u'||m.r==='a')&&typeof m.c==='string'; });
+    }catch(e){ AI.hist=[]; }
+    try{
+      const m=JSON.parse(localStorage.getItem(MEMO_KEY)||'{}')||{};
+      AI.memo=String(m.text||''); AI.memoUpto=Math.max(0,+m.upto||0);
+    }catch(e){ AI.memo=''; AI.memoUpto=0; }
+  }
+  function saveHist(){
+    try{
+      let h=AI.hist;
+      if(h.length>HIST_MAX) h=h.slice(-HIST_MAX);   /* 超量丢最旧的（要点已进摘要） */
+      localStorage.setItem(HIST_KEY, JSON.stringify(h));
+    }catch(e){ /* 写不进去（配额满 / 隐私模式）就算了，不能因此打断对话 */ }
+  }
+  function saveMemo(){ try{ localStorage.setItem(MEMO_KEY, JSON.stringify({text:AI.memo, upto:AI.memoUpto})); }catch(e){} }
+  function pushHist(r,c){ if(!c) return; AI.hist.push({r:r,c:String(c),t:Date.now()}); saveHist(); memoLine(); }
+  function memoLine(){
+    const t=$('aiMemTxt'); if(!t) return;
+    const turns=Math.floor(AI.hist.length/2);
+    t.innerHTML=turns
+      ? ('记忆：<b>'+turns+'</b> 轮'+(AI.memo?(' · 摘要 '+AI.memo.length+' 字'):' · 尚未压缩'))
+      : '尚无记忆（只保存在你这台设备上）';
+  }
+  /* 恢复上次的对话：气泡只画最近 40 条 —— 再多的已进摘要，全画出来没意义还卡 */
+  function restoreHist(){
+    memoLine();
+    if(!AI.hist.length) return;
+    const show=AI.hist.slice(-40);
+    if(AI.hist.length>show.length){
+      sysNote('… 更早的 '+Math.floor((AI.hist.length-show.length)/2)+' 轮已折叠'
+        +(AI.memo?'（要点在摘要里）':'')+'，点「清空记忆」可从头开始。');
+    }
+    show.forEach(function(m){
+      const b=bubble(m.r==='u'?'user':'assistant', m.c);
+      if(m.r==='a') foldIfLong(b);       /* 历史里的长回答也折叠，免得一屏全被占满 */
+    });
+    AI.msgs=AI.hist.slice(-CTX_TURNS*2).map(function(m){
+      return {role:(m.r==='u'?'user':'assistant'), content:m.c};
+    });
+  }
+  /* 压缩：把「旧摘要 + 一批新增对话」交给模型重压成新摘要。
+     ⚠ 最近 CTX_TURNS*2 条不压 —— 那些还要以原文发送。失败不影响对话（下次再试）。 */
+  async function compressMemo(){
+    if(AI.memoBusy||!AI.key) return;
+    const upto=AI.hist.length-CTX_TURNS*2;
+    if(upto<=AI.memoUpto) return;
+    const batch=AI.hist.slice(AI.memoUpto, upto);
+    if(batch.length<MEMO_EVERY) return;
+    AI.memoBusy=true;
+    try{
+      const r=await fetch(AI_API+'/v1/ai/memo',{method:'POST',
+        headers:{'Content-Type':'application/json','X-AI-Key':AI.key},
+        body:JSON.stringify({ prov:AI.prov, model:AI.model, prev:AI.memo,
+          msgs:batch.map(function(m){ return {role:(m.r==='u'?'user':'assistant'), content:m.c}; }) })});
+      const j=await r.json();
+      if(j&&j.ok&&j.memo){ AI.memo=String(j.memo); AI.memoUpto=upto; saveMemo(); memoLine(); }
+    }catch(e){ }
+    finally{ AI.memoBusy=false; }
+  }
+  function clearMemo(){
+    AI.hist=[]; AI.memo=''; AI.memoUpto=0; AI.msgs=[]; AI.ctxTold=0;
+    try{ localStorage.removeItem(HIST_KEY); localStorage.removeItem(MEMO_KEY); }catch(e){}
+    const box=$('aiScroll'); if(box) box.innerHTML='';
+    memoLine();
   }
   /* 把 HTTP 错误翻成人话 —— 直接甩 401 用户不知道该怎么办 */
   function hint(st,msg){
@@ -2631,55 +3118,63 @@ function afterLayoutChange(){
     const inp=$('aiInput'); if(!inp||AI.busy) return;
     const q=(inp.value||'').trim(); if(!q) return;
     if(!AI.key){ openCfg(true); sysNote('请先在 ⚙ 设置 里填入你自己的 API Key。'); return; }
-    const P=PROV[AI.prov]||PROV.deepseek;
     inp.value='';
     bubble('user',q);
+    pushHist('u',q);                              /* 存进本机历史（刷新/关页面都不丢） */
     AI.msgs.push({role:'user',content:q});
     if(AI.msgs.length>CTX_TURNS*2) AI.msgs=AI.msgs.slice(-CTX_TURNS*2);
     const body=bubble('assistant','');
     setBusy(true);
     let acc='';
     try{
-      /* ⚠ 人格不在前端了（2026-10-13 搬到 Worker 侧的 AI_PERSONA）——
-         这里**只发对话本身**，system prompt 由服务端注入。两个好处：
-         ① 浏览器侧搜不到人格文本；② "索要人格"的试探能在服务端直接拦掉（还不花你的钱）。 */
-      const r=await fetch(P.base+'/v1/ai/chat',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','X-AI-Key':AI.key},
-        body:JSON.stringify({ model:AI.model, messages:AI.msgs })
-      });
-      /* 服务端会回两种东西：JSON（被拦 / 报错）或 SSE 流。先按 content-type 分流 ——
-         否则拿 JSON 当 SSE 解析，会得到一片沉默的空白（只有光标在闪）。 */
-      const ct=(r.headers.get('content-type')||'');
-      if(ct.indexOf('application/json')>=0){
-        let j={}; try{ j=await r.json(); }catch(e){}
-        if(j&&j.error==='blocked'){ body.innerHTML=esc(j.msg||'这个我就不聊了。'); return; }
-        if(body) body.innerHTML='<span class="ai-warn">'+esc(hint(r.status,(j&&(j.msg||j.error))||('HTTP '+r.status)))+'</span>';
-        return;
-      }
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      /* SSE 流式：逐块读、按行切、只认 data: 开头的行 —— 让回答一个字一个字长出来。
-         ⚠ 必须自己拼 buffer：一次 read() 拿到的块**不保证**是完整的一行。 */
-      const rd=r.body.getReader(), dec=new TextDecoder();
-      let buf='';
-      while(true){
-        const s=await rd.read(); if(s.done) break;
-        buf+=dec.decode(s.value,{stream:true});
-        const parts=buf.split('\n'); buf=parts.pop();
-        for(let i=0;i<parts.length;i++){
-          const line=parts[i].trim();
-          if(line.indexOf('data:')!==0) continue;
-          const pay=line.slice(5).trim();
-          if(pay==='[DONE]') continue;
-          try{
-            const j=JSON.parse(pay);
-            const d=j.choices&&j.choices[0]&&j.choices[0].delta;
-            if(d&&d.content){ acc+=d.content; body.innerHTML=fmt(acc); scrollEnd(); }
-          }catch(e){}
+      /* ⚠ 人格不在前端（在 Worker 的 AI_PERSONA）—— 这里只发对话本身。
+         多轮：模型可以要求调工具 → 前端执行 → 结果回传 → 继续，直到它给出最终回答。
+         最多 4 轮（防死循环）。工具消息只存在于**本次请求**，不进 AI.msgs，
+         所以下一轮对话不会拖着一堆过期数据。 */
+      const send=AI.msgs.slice();
+      let useTools=true;
+      for(let round=0; round<4; round++){
+        let res;
+        try{ res=await aiRound(send, body, useTools); }
+        catch(e){ if(body) body.innerHTML='<span class="ai-warn">'+esc(String((e&&e.message)||e))+'</span>'; return; }
+        /* 个别服务商/模型不支持 function calling（会直接 400）→ 关掉工具重试一次，不打扰用户 */
+        if(res.err && useTools && /tool|function|not support|不支持/i.test(String(res.raw||'')+' '+String(res.err))){
+          useTools=false; if(body) body.innerHTML=''; continue;
         }
+        if(res.blocked){ if(body) body.innerHTML=esc(res.msg||'这个我就不聊了。'); return; }
+        if(res.err){ if(body) body.innerHTML='<span class="ai-warn">'+esc(res.err)+'</span>'; return; }
+        acc=res.text||'';
+        if(!res.tools||!res.tools.length) break;
+        /* —— 模型要求查数据 —— */
+        const calls=res.tools.map(function(t){
+          return { id: t.id||('call_'+Math.random().toString(36).slice(2,9)), type:'function',
+                   function:{ name:t.name, arguments:t.args||'{}' } };
+        });
+        send.push({ role:'assistant', content:acc||'', tool_calls:calls });
+        if(body) body.innerHTML='<span class="ai-tool">正在查数据…（'
+          +calls.map(function(c){ return c.function.name; }).join('、')+'）</span>';
+        for(let k=0;k<calls.length;k++){
+          const c=calls[k];
+          let out='';
+          try{
+            const fn=AI_RUN[c.function.name];
+            if(!fn) out='（没有这个工具：'+c.function.name+'）';
+            else{
+              let args={}; try{ args=JSON.parse(c.function.arguments||'{}'); }catch(e){}
+              out=await fn(args);
+            }
+          }catch(e){ out='工具执行出错：'+String((e&&e.message)||e).slice(0,90); }
+          send.push({ role:'tool', tool_call_id:c.id, content:String(out||'').slice(0,6000) });
+        }
+        acc='';
       }
-      if(!acc){ body.innerHTML='<span class="ai-warn">模型没返回内容（可能被内容策略拦了，或该模型不支持流式）。</span>'; }
-      else AI.msgs.push({role:'assistant',content:acc});
+      if(!acc){ if(body) body.innerHTML='<span class="ai-warn">模型没返回内容（可能被内容策略拦了，或该模型不支持流式）。</span>'; }
+      else{
+        AI.msgs.push({role:'assistant',content:acc});
+        pushHist('a',acc);
+        foldIfLong(body);                  /* 太长就折叠（可展开） */
+        compressMemo();                    /* 攒够 2 轮就压缩一次（异步，不阻塞对话） */
+      }
     }catch(e){
       const m=String((e&&e.message)||e);
       if(body) body.innerHTML='<span class="ai-warn">'+esc(m)+'</span>';
@@ -2687,10 +3182,11 @@ function afterLayoutChange(){
   }
   function initAi(){
     if(AI.inited) return; AI.inited=true;
-    loadCfg(); syncCfgUI();
+    loadCfg(); loadHist(); syncCfgUI();
     if(!AI.key){ openCfg(true); }
-    else sysNote('已就绪 · 模型 <b>'+esc(AI.model)+'</b> · 费用由你的 Key 直接结算。<br>'
-      +'提示：<b>我没有实时行情</b>——问具体数字时请把数据贴给我，或去站内「板块资金流 / 机构预测 / 宏观数据」看。');
+    else sysNote('已就绪 · 模型 <b>'+esc(AI.model)+'</b> · 费用由你的 Key 直接结算。');
+    /* 把上次的对话读回来（只存在你这台设备上）。放在提示之后，气泡才在下面。 */
+    restoreHist();
   }
   function bind(){
     const seg=$('railSeg');
@@ -2718,12 +3214,51 @@ function afterLayoutChange(){
     const inp=$('aiInput');
     if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ask(); } });
     const cb=$('aiCfgBtn'); if(cb) cb.onclick=function(){ openCfg(!AI.cfgOpen); };
+    /* 换服务商 → 回到该家的默认模型，并把上一次「拉取模型」的结果清掉（避免串家） */
+    const pv=$('aiProv'); if(pv) pv.onchange=function(){
+      AI.prov=pv.value||'deepseek';
+      AI.model=(PROV[AI.prov]||{}).model||'';
+      const tip=$('aiFetchTip'); if(tip) tip.style.display='none';
+      fillModel();
+    };
+    const ms=$('aiModelSel'); if(ms) ms.onchange=function(){
+      const mi=$('aiModel');
+      if(ms.value==='__custom'){ if(mi){ mi.style.display=''; mi.focus(); } }
+      else{ if(mi) mi.style.display='none'; AI.model=ms.value; }
+    };
+    /* 模型名会被官方随时改，预置列表可能过时 ⇒ 支持向服务商实时拉一份 */
+    const fb=$('aiFetchBtn'); if(fb) fb.onclick=function(){ fetchModels(false); };
+    /* 「带上当前看板数据」开关：改了立即生效并存盘，不用点保存 */
+    const ck=$('aiCtxOn'); if(ck) ck.onchange=function(){ AI.ctxOn=!!ck.checked; saveCfg(); };
+    /* 搜索服务商：换一家立即生效（Key 要等点「保存」，免得半截输入就被存进去） */
+    const spSel=$('aiSearchProv'); if(spSel) spSel.onchange=function(){ AI.searchProv=spSel.value; saveCfg(); };
+    /* 清空本机记忆（对话 + 摘要）。⚠ 只清这台设备上的，不涉及服务器（服务器本来就没存） */
+    const mc=$('aiMemClear'); if(mc) mc.onclick=function(){
+      if(typeof confirm==='function' && !confirm('清空本机保存的全部对话与摘要？')) return;
+      clearMemo();
+      sysNote('记忆已清空（只影响你这台设备）。');
+    };
     const sv=$('aiSaveBtn'); if(sv) sv.onclick=function(){
       AI.prov=(($('aiProv')||{}).value)||'deepseek';
       AI.key=((($('aiKey')||{}).value)||'').trim();
-      AI.model=((($('aiModel')||{}).value)||'').trim()||((PROV[AI.prov]||{}).model||'');
-      saveCfg(); openCfg(false); sysNote('已保存（只存在你这台设备的浏览器里）。');
+      const sel=$('aiModelSel'), mi=$('aiModel');
+      const m=(sel&&sel.value&&sel.value!=='__custom')?sel.value:((((mi||{}).value)||'').trim());
+      AI.model=m||((PROV[AI.prov]||{}).model||'');
+      const ck2=$('aiCtxOn'); if(ck2) AI.ctxOn=!!ck2.checked;
+      const sp2=$('aiSearchProv'); if(sp2&&sp2.value) AI.searchProv=sp2.value;
+      const sk2=$('aiSearchKey'); if(sk2) AI.searchKey=String(sk2.value||'').trim();
+      saveCfg(); openCfg(false);
+      sysNote('已保存（只存在你这台设备的浏览器里）· 服务商 '+esc((PROV[AI.prov]||{}).name||AI.prov)+' · 模型 <b>'+esc(AI.model)+'</b>');
     };
+    /* ⚠⚠ 刷新页面时如果上次就停在「AI 助手」页签：右栏那边只会把 .on 类加回去，
+       **不会触发 click** ⇒ initAi() 不执行 ⇒ 设置面板不展开、上次的对话也读不回来。
+       表现就是"必须点一下评论再切回来才正常"（2026-10-13 用户截图反馈）。
+       这里按 localStorage 主动补一次初始化 —— 不依赖两个模块谁先执行。 */
+    (function(){
+      let lt=''; try{ lt=localStorage.getItem('td_rail_tab')||''; }catch(e){}
+      const box=$('railAi');
+      if(lt==='ai'||(box&&box.classList.contains('on'))) initAi();
+    })();
     const cl=$('aiClearBtn'); if(cl) cl.onclick=function(){
       AI.key=''; AI.msgs=[];
       const k=$('aiKey'); if(k) k.value='';
