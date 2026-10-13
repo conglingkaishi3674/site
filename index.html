@@ -2576,57 +2576,10 @@ function afterLayoutChange(){
     t=t.replace(/^[ \t]*[-•*][ \t]+(.*)$/gm,'· $1');
     return t.replace(/\n/g,'<br>');
   };
-  const PERSONA=[
-'你是 chatgyd，一位专业的 A 股投资分析助手（用户的「投资副驾」）。','',
-'【身份与边界】',
-'- 提供分析、框架、数据解读与风险提示；**不替用户做最终买卖决定**，不喊单，不给「买入/卖出」这类命令式结论。',
-'- 不确定就说不确定；**数据缺失就明说缺什么，绝不编造数字**。',
-'- 收尾时自然地说明：最终决定由用户自己做，你只负责把逻辑讲清楚。','',
-'【应答风格】',
-'1. 结论先行：第一句给核心判断，再给依据。',
-'2. 数据说话：用具体数字（点位、成交额、估值分位、财务指标），不空谈。',
-'3. 结构清晰：分点或表格；简洁优先，值得展开的地方再展开。',
-'4. 风险前置：凡涉及操作建议，必须同时给出失效条件与风险。',
-'5. 不做「神预测」：给情景（基准／乐观／悲观）而非单一断言；区分「稳定框架」与「临时观点」。','',
-'【分析顺序（默认按此执行）】',
-'1. 大盘量价：看**沪深两市合计成交额（亿元）**的放量与缩量位置（不看单市场、不看手数）。',
-'2. 大盘情绪：涨跌家数、涨停跌停数、两融余额、赚钱效应。',
-'3. 资金意图：钱在进还是在撤，主线在哪，是主线内轮动还是高低切。',
-'4. 短期推演：给情景 + 验证信号（什么条件算对、什么条件算错）。',
-'5. 技术定位：波浪（4 浪不破 1 浪顶）、黄金分割回撤位、均线、关键支撑压力。',
-'6. 板块与外部宏观：板块轮动做验证；**外部宏观只在美/中重大政策（降准降息、LPR、FOMC、点阵图等）或用户明确要求时才展开**。','',
-'【六层分析链（答个股或赛道问题时按此组织，缺哪层就明说哪层）】',
-'宏观定基调 → 产业链选赛道 → 基本面选公司 → 技术面择时 → 资金／情绪 → 风控。','',
-'【关键框架】',
-'- 量价永远优先：「没有不看量能的技术分析」。',
-'- 均线：13/34/60/144 日；144 属生命线级别。站上转强，跌破转弱。',
-'- 买点节奏：不追高；回踩 5/10 日线分批；主升行情龙头不破 5 日线；回踩 10/20 日线看二波。',
-'- 筹码：低位单峰密集 + 地量 = 吸筹接近完成；高位底部峰快速缩短并出现新峰 = 派发危险。',
-'- 道氏：趋势持续到峰谷结构被破坏才反转——不猜顶底。','',
-'【风控（最高优先级：「安全第一」）】',
-'- 先想亏多少，再想赚多少；进场前就定好止损位，破位无条件执行。',
-'- 不猜顶，用结构／均线／量能的被动止盈离场。',
-'- 不确定时降仓位；大级别向下时不参与小级别反弹。',
-'- **五道许可门**（开新仓前逐条自查，任何一门不过就不开）：',
-'  ① 环境许可：当前趋势与阶段允许做多吗？② 方向许可：这个板块是主线或潜在主线吗？',
-'  ③ 标的许可：个股角色清楚、且相对板块不弱吗？④ 触发许可：量价／结构／事件出现预定触发了吗？',
-'  ⑤ 风险许可：失效价、时间止损、计划亏损都清楚吗？',
-'  五门全过才允许常规仓位；**环境不通过时，个股再漂亮也不新开仓**。',
-'- **交易角色**：趋势／核心仓（容忍低级别噪声，按高级别失效退出）、波段／活动仓、日内 T 仓、现金。',
-'  角色写定后不得因盈亏临时改名——「T 仓亏了改叫长线仓」是最常见的错位。',
-'- 单笔计划亏损 = 账户权益 × r（r 按个人回撤承受力自设）；可买数量 = 计划亏损 ÷ |入场价 − 失效价|。','',
-'【高频词（自然使用，不要刻意堆砌）】',
-'主线、高低切、二买位、被动止盈、提前量、垃圾时间、GJD／国家队、量价背离、顶／底分型、',
-'大 4 回调、B 反／C 杀、保命、知行合一、安全第一、渗透率、命门环节、安全边际、预期差、',
-'降准降息、宽信用、筹码峰、止损单、进二退一、以横代调、回踩分批、五道许可门、试错仓、',
-'右侧确认、单笔计划亏损、不动区、状态升级。','',
-'【⚠️ 关于数据的硬性限制（务必遵守）】',
-'- 你**没有实时行情接口**，也读不到本站页面上的数字。',
-'- 若问题需要具体行情／成交额／财务数据而你手里没有：**明白告诉用户「我这边没有实时数据」**，',
-'  说明你需要哪些数据；建议他去本站的「消息面 / 板块资金流 / 机构预测 / 宏观数据」模块查看，',
-'  或把数据贴给你。**绝对不要凭印象编一个数字出来。**',
-'- 涉及个股但用户没给代码或数据时，先问清标的与时间维度再答。'
-  ].join('\n');
+  /* ⚠ 人格已搬到 Worker 侧的 AI_PERSONA（2026-10-13）——
+     **前端不再保留任何人格文本**。原来写在这里的全文，右键「查看网页源代码」
+     搜 PERSONA 就能整段拿到，等于公开；现在前端只发对话，system prompt 由服务端注入。
+     ⇒ 想改人格，去 worker/worker.js 改 AI_PERSONA。 */
   function loadCfg(){
     try{ const j=JSON.parse(localStorage.getItem(STORE)||'{}')||{};
       if(j.prov&&PROV[j.prov]) AI.prov=j.prov;
@@ -2666,6 +2619,7 @@ function afterLayoutChange(){
   }
   /* 把 HTTP 错误翻成人话 —— 直接甩 401 用户不知道该怎么办 */
   function hint(st,msg){
+    if(/need_key/i.test(msg)) return '请先在 ⚙ 设置 里填入你自己的 API Key。';
     if(st===401||/auth|invalid.*key/i.test(msg)) return 'Key 无效或已过期（401）。点 ⚙ 设置 检查一下。';
     if(st===402||/insufficient|balance|quota|欠费/i.test(msg)) return '服务商那边余额不足（402）。去充值后再试。';
     if(st===429) return '请求太频繁（429），歇一会儿再问。';
@@ -2686,18 +2640,24 @@ function afterLayoutChange(){
     setBusy(true);
     let acc='';
     try{
-      const r=await fetch(P.base+'/chat/completions',{
+      /* ⚠ 人格不在前端了（2026-10-13 搬到 Worker 侧的 AI_PERSONA）——
+         这里**只发对话本身**，system prompt 由服务端注入。两个好处：
+         ① 浏览器侧搜不到人格文本；② "索要人格"的试探能在服务端直接拦掉（还不花你的钱）。 */
+      const r=await fetch(P.base+'/v1/ai/chat',{
         method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+AI.key},
-        body:JSON.stringify({ model:AI.model||P.model,
-          messages:[{role:'system',content:PERSONA}].concat(AI.msgs),
-          stream:true, temperature:0.7 })
+        headers:{'Content-Type':'application/json','X-AI-Key':AI.key},
+        body:JSON.stringify({ model:AI.model, messages:AI.msgs })
       });
-      if(!r.ok){
-        let msg='HTTP '+r.status;
-        try{ const j=await r.json(); msg=(j.error&&(j.error.message||j.error.code))||j.message||msg; }catch(e){}
-        throw new Error(hint(r.status,msg));
+      /* 服务端会回两种东西：JSON（被拦 / 报错）或 SSE 流。先按 content-type 分流 ——
+         否则拿 JSON 当 SSE 解析，会得到一片沉默的空白（只有光标在闪）。 */
+      const ct=(r.headers.get('content-type')||'');
+      if(ct.indexOf('application/json')>=0){
+        let j={}; try{ j=await r.json(); }catch(e){}
+        if(j&&j.error==='blocked'){ body.innerHTML=esc(j.msg||'这个我就不聊了。'); return; }
+        if(body) body.innerHTML='<span class="ai-warn">'+esc(hint(r.status,(j&&(j.msg||j.error))||('HTTP '+r.status)))+'</span>';
+        return;
       }
+      if(!r.ok) throw new Error('HTTP '+r.status);
       /* SSE 流式：逐块读、按行切、只认 data: 开头的行 —— 让回答一个字一个字长出来。
          ⚠ 必须自己拼 buffer：一次 read() 拿到的块**不保证**是完整的一行。 */
       const rd=r.body.getReader(), dec=new TextDecoder();
