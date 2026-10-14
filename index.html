@@ -3588,12 +3588,41 @@ function subBase(){
   }catch(e){}
   return 'https://api.conglingkaishi3674.com';
 }
-function subDid(){
+/* 设备指纹 —— 不依赖任何存储，同一台设备每次算出来都一样。
+   为什么要它：Safari 隐私浏览 / 禁用 Cookie 时 localStorage 存不住，
+   原来那种「随机数」方案每开一次页面就换一个 did ⇒ 服务端每次都当成一台新设备，
+   把「一张码最多 3 台」的名额白白吃光（2026-10-14 用户反馈：Safari 上每开一次都要重新兑换）。
+   ⚠ 只取**稳定**特征（UA / 语言 / 屏幕物理尺寸 / 时区…），绝不能掺随机数或时间。 */
+function subFp(){
   try{
-    let d=localStorage.getItem('sub_did');
-    if(!d){ d='d'+Math.random().toString(16).slice(2,10)+Date.now().toString(16); localStorage.setItem('sub_did',d); }
-    return d;
-  }catch(e){ return 'd-nostore'; }
+    const n=navigator||{}, sc=screen||{};
+    /* 屏幕取长短边，横竖屏切换时不至于算出两个不同的值 */
+    const w=Math.min(sc.width||0,sc.height||0), h=Math.max(sc.width||0,sc.height||0);
+    const parts=[
+      n.userAgent||'', n.platform||'', n.language||'', (n.languages||[]).join(','),
+      (n.hardwareConcurrency||0), (n.maxTouchPoints||0),
+      w+'x'+h, (window.devicePixelRatio||1), (sc.colorDepth||0),
+      new Date().getTimezoneOffset()
+    ].join('|');
+    let x=2166136261;
+    for(let i=0;i<parts.length;i++){ x^=parts.charCodeAt(i); x=(x*16777619)>>>0; }
+    return 'f'+x.toString(16);
+  }catch(e){ return 'f0'; }
+}
+function subDid(){
+  /* ① 本地存了就用它 —— 老用户的白名单里存的就是这个值，别擅自换掉。
+        多读一个 cookie：localStorage 被清时它往往还在。 */
+  try{ const d=localStorage.getItem('sub_did'); if(d) return d; }catch(e){}
+  try{
+    const m=/(?:^|;\s*)sub_did=([^;]+)/.exec(document.cookie||'');
+    if(m&&m[1]) return decodeURIComponent(m[1]);
+  }catch(e){}
+  /* ② 都没有 → 用指纹。它是决定性的：同一台设备永远同一个值，
+        所以即使每次都被清空，也不会再一个接一个地占用设备名额。 */
+  const fp=subFp();
+  try{ localStorage.setItem('sub_did',fp); }catch(e){}
+  try{ document.cookie='sub_did='+encodeURIComponent(fp)+';max-age=31536000;path=/;SameSite=Lax'; }catch(e){}
+  return fp;
 }
 function subSave(tk){
   SUB.tk=tk||'';
@@ -3642,6 +3671,16 @@ function subPaint(){
 async function subMe(){
   SUB.did=subDid();
   try{ SUB.tk=localStorage.getItem('sub_tk')||''; }catch(e){}
+  /* 票丢了（Safari 这类会清本地存储的浏览器）→ 先凭设备标识找回，
+     免得用户每次打开都要重新输一遍兑换码。
+     只有「这台设备之前兑换过」（did 在某张码的白名单里）才找得回，所以不会变成通用后门。 */
+  if(!SUB.tk){
+    try{
+      const r=await fetch(subBase()+'/v1/sub/recover?did='+encodeURIComponent(SUB.did)+'&_t='+Date.now(),{cache:'no-store'});
+      const j=await r.json();
+      if(j&&j.ok&&j.token) subSave(j.token);
+    }catch(e){}
+  }
   if(!SUB.tk){ SUB.ok=false; SUB.loaded=true; subPaint(); return; }
   try{
     const r=await fetch(subBase()+'/v1/sub/me?tk='+encodeURIComponent(SUB.tk)+'&did='+encodeURIComponent(SUB.did)+'&_t='+Date.now(),{cache:'no-store'});
