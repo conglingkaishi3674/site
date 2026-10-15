@@ -395,6 +395,16 @@
  .db-note{color:var(--muted);font-size:11.5px;line-height:1.85;margin-top:12px;
    border-top:1px dashed var(--line);padding-top:10px}
  .db-note b{color:var(--text)}
+ /* 机构持仓页签：搜索条 + 机构类型切换 + 排行表 */
+ .inst-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+ .inst-bar input{flex:1 1 260px;min-width:170px;background:var(--bg-soft);border:1px solid var(--line);
+   color:var(--text);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px}
+ .inst-bar input::placeholder{color:var(--muted)}
+ .inst-bar select{background:var(--bg-soft);border:1px solid var(--line);color:var(--text);
+   border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;max-width:190px}
+ .inst-tip{font-size:11.5px;color:var(--muted);flex:1 1 100%}
+ .inst-seg{margin:0 0 12px;flex-wrap:wrap}
+ .inst-more{display:flex;justify-content:center;margin:10px 0 2px}
  /* 龙虎榜：标的行 + 展开的席位明细 */
  .lhb-hd{display:grid;grid-template-columns:1.7fr .7fr .8fr 1fr 1fr 1fr .7fr;gap:6px;align-items:center;
    padding:0 12px 6px;color:var(--muted);font-size:11px}
@@ -1447,6 +1457,7 @@
     <button data-db="national">国家队动向</button>
     <button data-db="etf">ETF 申赎</button>
     <button data-db="macro">宏观数据</button>
+    <button data-db="inst">机构持仓</button>
     <button data-db="pred">机构预测</button>
    </div>
 
@@ -5578,7 +5589,7 @@ const FSG=v=>'<span class="'+FCLS(v)+'">'+FDL(v)+'</span>';
 const dbCard=(k,v,s,c)=>'<div class="db-card"><i>'+k+'</i><b class="'+(c?FCLS(c):'')+'">'+v+'</b><small>'+s+'</small></div>';
 function dbAnalyze(c){
   const L=[], net=c.net, dn=c.netChg, short=net<0;
-  L.push('<b>'+ces(c.code)+'</b> 前 20 席位：持买单 <b>'+FN(c.long)+'</b> 手、持卖单 <b>'+FN(c.short)+'</b> 手，净持仓 <b>'+FDL(net)+'</b> 手（'+(short?'净空':'净多')+' '+FN(Math.abs(net))+' 手）。');
+  L.push('<b>'+ces(c.code)+'</b> 前 20 席位：持买单 <b>'+FN(c.long)+'</b> 手、持卖单 <b>'+FN(c.short)+'</b> 手，<b>'+(short?'净空':'净多')+' '+FN(Math.abs(net))+'</b> 手。');
   if(Math.round(dn)===0){ L.push('净持仓与上一交易日持平 —— 多空力量对比没有变化。'); }
   else{
     const widen = short ? (dn<0) : (dn>0);
@@ -5910,7 +5921,13 @@ function dbRender(j){
   h+='<div class="db-cards">'
     + dbCard('持买单量', FN(m.long), '较上日 '+FDL(m.longChg), m.longChg)
     + dbCard('持卖单量', FN(m.short), '较上日 '+FDL(m.shortChg), m.shortChg)
-    + dbCard('净持仓', FDL(m.net), (m.net<0?'净空':'净多')+' · 较上日 '+FDL(m.netChg), m.netChg)
+    /* ⚠ 主值**不写负号**，改成「净空 30,419」的文字表达，颜色仍取「较上日变化」（netChg）：
+       净空收窄=偏多=红、扩大=偏空=绿。
+       原来主值是 FDL(net)（-30,419）、颜色却取 netChg（+2,596）→ 出现「负数标红」，
+       用户第一反应就是「这数据错了吧」（2026-10-15 反馈）。文字化 + 副标题写明收窄/扩大后，
+       数字与颜色不再互相打架，边际方向也一眼看得出。 */
+    + dbCard('净持仓', (m.net<0?'净空 ':'净多 ')+FN(Math.abs(m.net)),
+        '较上日'+(Math.abs(m.netChg)<1?'持平':((m.netChg>0?'收窄 ':'扩大 ')+FN(Math.abs(m.netChg))+' 手')), m.netChg)
     + dbCard('前20总持仓', FN(m.oi), '较上日 '+FDL(m.oiChg), m.oiChg)
     + dbCard('成交量', FN(m.vol), '当日合计')
     + '</div>';
@@ -7090,15 +7107,21 @@ async function chanceScanAll(){
          busy 必须先置 false —— 不然下面这次 dbLoad 会被上一页签的锁挡掉，
          页面就永远停在「加载中…」。 */
       DB.busy=false; DB.gen++;
+      /* ⚠ 机构持仓是独立模块（不走 dbLoad），**同样要解锁 + 换代次** ——
+         它加载慢（要拉 380KB 快照），用户等不及切走、再切回来时，
+         不清 busy 就会被上一次那把锁挡住 → 页面永远空白（2026-10-15 用户报「加载不出来数据」）。
+         同一句教训在 DB 那边也写着，别只改一边。 */
+      INST.busy=false; INST.gen++;
       tabs.forEach(function(x){ x.classList.toggle('on', x===b); });
       /* ---- 宏观数据：**不走 dbLoad** ----
          它是「搜指标 → 选一个 → 看图」的交互式模块，不是"某一天的市场快照"，
          所以不参与日期翻页那套。这里只把日期导航收起、清空容器，剩下的交给 macroInit()。
          ⚠ 必须 return，否则会继续往下跑 isSnap 分支并 dbLoad(0)，把容器又覆盖掉。 */
-      if(t==='macro'||t==='pred'){
+      if(t==='macro'||t==='pred'||t==='inst'){
         /* ⚠ 「刷新」按钮(dbGo) 也必须收起来：它的 onclick 是 dbLoad(1)，
            而 dbLoad 会按 DB.tab 分发 —— 落到默认的 dbRender() 会把面板整个冲掉。
-           这两个模块自己的入口分别是：宏观=搜索框+预设按钮；机构预测=代码输入框。 */
+           这几个模块自己的入口分别是：宏观=搜索框+预设按钮；机构预测=代码输入框；
+           机构持仓=搜索框+类型切换（数据一次拉全市场，本地筛选排序）。 */
         ['dbPrev','dbDate','dbNext','dbGo'].forEach(function(id){
           const el=document.getElementById(id); if(el) el.style.display='none';
         });
@@ -7110,6 +7133,7 @@ async function chanceScanAll(){
         DB.busy=false;
         if(t==='macro'&&typeof macroInit==='function') macroInit();
         if(t==='pred'&&typeof predInit==='function') predInit();
+        if(t==='inst'&&typeof instInit==='function') instInit();
         return;
       }
       /* 从「宏观数据」切回来时，把上面收起来的控件恢复出来 */
@@ -7256,6 +7280,507 @@ function pdDirCls(s){
   if(/上调|调高|调升/.test(t)) return 'up';
   if(/下调|调低|调降/.test(t)) return 'dn';
   return 'mid';
+}
+/* ================= 数据浏览 · 机构持仓（东财「机构持股」/ 季报口径）=================
+   数据来自 Worker /v1/em/orghold（东财 zlsj 全市场快照，Worker 边缘缓存 6 小时）。
+   为什么走 Worker：① 东财那个列表接口没有 CORS 头，前端直连会被浏览器拦；
+   ② 全市场要 12 次分页请求（约 5500 只），放前端既慢又容易被切页签打断。
+   ⚠ 口径红线（页面上也写了，改之前先读）：
+     · **季报口径** —— 机构家数 / 持仓来自最近一期报告（当前中报 2026-06-30），
+       三季报要到 10 月底才披露完 ⇒ 天然滞后一个季度，**不是实时持仓**。
+     · 「机构家数」= 该期持有这只股票的机构数量（按类型分组计数）。
+     · 行业取自母版内置的 SEC_MAP（申万二级，与东财 f100 同口径），零网络依赖。
+   ⚠ 设计取舍：
+     · 分类维度用「机构类型」（接口原生支持，切换即换口径）+「行业」（本地映射）；
+       **不做概念分类** —— 一股对应多个概念、且要遍历数百个板块成分，成本高收益低。
+     · 全市场 5500+ 行不做一次性渲染（DOM 太重），默认只画前 100 行 +「显示更多」。 */
+/* date='' 表示「最新期」；idx = 服务器给的期次列表；type 用原名（'0'=全部机构）；
+   hcode = 当前展开跨期明细的股票代码（点行展开 / 再点收起）；
+   gen = 代次，切页签/换口径时 +1，让在途请求的结果作废（不换代次会把旧数据画到新界面上） */
+const INST={type:'0', date:'', q:'', ind:'', sk:'nOrg', sd:-1, busy:false, limit:100, objs:null, inds:null, idx:null, idxAt:0, hcode:'', gen:0, pack:null};
+const INST_MEM={};        /* type → 已拉到的整包（会话内缓存；Worker 侧另有 6 小时边缘缓存） */
+const INST_TYPES=[['0','全部机构'],['1','基金'],['2','QFII'],['3','社保'],['4','券商'],['5','保险'],['6','信托']];
+/* 每类机构的口径说明：切类型时跟着换 —— 免得把「基金家数」读成「所有机构家数」 */
+const INST_TIP={'0':'全部机构合并计数（基金 / 社保 / QFII / 保险 / 券商 / 信托）',
+  '1':'公募基金，含 ETF / 指数基金（被动持有也算，不代表主动看好）',
+  '2':'合格境外机构投资者','3':'全国社保基金组合','4':'证券公司自营','5':'保险资金','6':'信托计划'};
+function instBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
+/* 数据**主通道**：GitHub Pages 上的快照（走全球 CDN，比「服务器 → CF 隧道」那条快一两个数量级）。
+   文件放在 site 仓库的 data/orghold/ 下（那个仓库只推 index.html，不会清目录）。
+   Worker 的 /v1/choice/snapshot/orghold 作**兜底**：CDN 拿不到时自动回落，用户无感。 */
+function instCdn(){ return 'https://conglingkaishi3674.com/data/orghold'; }
+/* ===== 主通道：**浏览器直连东财数据中心** =====
+   `datacenter-web.eastmoney.com` 带 `Access-Control-Allow-Origin: *` ⇒ 跨域可直连（已实测）。
+   ⚠ 为什么不用 `data.eastmoney.com/dataapi/zlsj/list`：那是东财自己的服务端代理，**没有 CORS 头**，
+     浏览器直连会被拦；而它底层调的正是这里的 `RPT_MAIN_ORGHOLD`（2026-10-15 试出来的报表名）。
+   ⚠ filter 里 `ORG_TYPE` 是**两位**（"00" 全部机构 / "01" 基金 / "02" QFII …），写 "0" 会报 9501。
+   ⚡ 实测：全市场 12 页（每页 500，上限就是 500）并行 **≈1.1 秒** —— 比走服务器 / CDN 快一个数量级。 */
+const INST_RT='https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_MAIN_ORGHOLD';
+const INST_RD='https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_MAIN_REPORTDATE';
+/* ⚠⚠ ORG_TYPE 必须**两位**（"00" 全部机构 / "01" 基金 …）。前端内部用的是单位数 '0'~'6'，
+   这里统一补齐 —— 写 "0" 东财会返回 9501（报表配置不存在），直连整条失效并**悄悄降级到慢通道**。
+   （2026-10-15 踩实：页面上期次下拉能正常显示（那个口不带 filter），但数据永远取不到。） */
+function instOrgT(t){ t=String(t||'0'); return t.length<2?('0'+t):t; }
+function instRptUrl(type,date,n){
+  const f="(REPORT_DATE='"+date+"')(ORG_TYPE=\""+instOrgT(type)+"\")";
+  return INST_RT+'&columns=ALL&pageNumber='+n+'&pageSize=500&sortColumns=HOLD_VALUE&sortTypes=-1'
+    +'&source=WEB&client=WEB&filter='+encodeURIComponent(f);
+}
+/* 东财原始行 → 前端紧凑行（列序与服务器快照一致，渲染层不用动） */
+function instSlim(x){
+  return [x.SECURITY_CODE,x.SECURITY_NAME_ABBR,x.HOULD_NUM||0,Math.round(x.HOLD_VALUE||0),
+    Math.round((x.FREESHARES_RATIO||0)*100)/100,Math.round((x.TOTALSHARES_RATIO||0)*100)/100,
+    x.HOLDCHA_NUM||0,Math.round(x.HOLDCHA_VALUE||0)];
+}
+/* 代码 → SEC_MAP 的键（那张申万二级表用的是 600519.SH 这种带后缀格式） */
+function instSym(c){
+  c=String(c||'');
+  if(/^(6|9)/.test(c)) return c+'.SH';
+  if(/^(0|3|2)/.test(c)) return c+'.SZ';
+  if(/^(4|8)/.test(c)) return c+'.BJ';
+  return c;
+}
+function instInd(code){
+  try{ return (typeof SEC_MAP!=='undefined'&&SEC_MAP)?(SEC_MAP[instSym(code)]||''):''; }catch(e){ return ''; }
+}
+function instInit(){
+  const box=document.getElementById('dbBody'); if(!box) return;
+  /* ⚠ 重建界面时必须**解锁**：上一次请求可能还挂在网上（快照 380KB 慢），
+     不清 busy 的话这一次 instLoad 会被直接挡掉 → 页面一片空白、连提示都没有。 */
+  INST.busy=false;
+  /* 已经画过 → 只刷数据，别把用户填的搜索词 / 选中的类型重建掉 */
+  if(document.getElementById('instQ')){ instLoad(0); return; }
+  let tp='';
+  for(let i=0;i<INST_TYPES.length;i++){
+    tp+='<button data-it="'+INST_TYPES[i][0]+'"'+(INST.type===INST_TYPES[i][0]?' class="on"':'')+'>'+INST_TYPES[i][1]+'</button>';
+  }
+  box.innerHTML='<div class="inst-bar">'
+    +'<input id="instQ" placeholder="搜代码或名称，例如 600519 / 茅台" value="'+ces(INST.q)+'">'
+    +'<select id="instPeriod" title="报告期（季报口径）"></select>'
+    +'<select id="instInd"><option value="">全部行业</option></select>'
+    +'<span class="inst-tip" id="instTip">'+ces(INST_TIP[INST.type]||'')+'</span>'
+    +'</div>'
+    +'<div class="sec-seg inst-seg" id="instTypes">'+tp+'</div>'
+    +'<div class="db-cards" id="instCards"></div>'
+    +'<div id="instNote"></div>'
+    +'<div id="instTable"></div>'
+    +'<div id="instHist"></div>'
+    +'<div class="db-note"><b>怎么读这份数据：</b>这是<b>季报口径</b>的机构持仓 —— 报告期见上方卡片，'
+    +'<b>切「报告期」下拉能看到同一只票几个季度来的变化</b>。'
+    +'「<b>机构家数</b>」= 该期持有这只股票的机构数量；「<b>持股市值</b>」按报告期末收盘价算；'
+    +'「<b>占流通(%)</b>」= 机构持股 ÷ 流通股，<b>这个数越高越说明筹码集中在机构手里</b>；'
+    +'「<b>户均(万元)</b>」= 持股市值 ÷ 机构家数，<b>这是识破「假重仓」最有用的一列</b>。<br>'
+    +'⚠ 四个实话：① <b>机构家数会被次新股污染</b> —— 新股上市时几千家基金打新各拿几百股，'
+    +'家数能冲到 3000+，但<b>户均只有一两万元</b>（表里淡色显示的就是这种）。'
+    +'判断「真重仓」要<b>家数 + 户均 + 占流通比一起看</b>，只盯家数会被带偏；'
+    +'② <b>ETF 的被动持有也算机构持股</b> —— 沪深300ETF 拿几亿股不代表基金经理主动看好；'
+    +'③ <b>数据滞后一个季度</b>（报告期结束后 1~3 个月才披露完，三季报要到 10 月底），'
+    +'适合判断「中长期是否被机构抱团」，<b>不能</b>用来追踪这几天机构在不在场（那要看龙虎榜 / 北向）；'
+    +'④「<b>增持 / 减持</b>」是相对<b>上一期</b>的持股数变化，不是这几天的动作。</div>';
+  const q=document.getElementById('instQ');
+  if(q){
+    let tm=null;
+    q.oninput=function(){
+      const v=this.value; clearTimeout(tm);
+      tm=setTimeout(function(){ INST.q=v; INST.limit=100; instPaint(); },220);
+    };
+  }
+  const sel=document.getElementById('instInd');
+  if(sel) sel.onchange=function(){ INST.ind=this.value; INST.limit=100; instPaint(); };
+  /* 报告期切换：分类口径只有最新一期（下拉会被禁用），这是设计如此 */
+  const pd=document.getElementById('instPeriod');
+  if(pd) pd.onchange=function(){ INST.date=this.value; INST.limit=100; instLoad(1); };
+  const tb=document.getElementById('instTypes');
+  if(tb){
+    tb.querySelectorAll('button').forEach(function(b){
+      b.onclick=function(){
+        const v=this.getAttribute('data-it');
+        if(INST.type===v) return;
+        INST.type=v; INST.date=''; INST.limit=100; INST.q=''; INST.ind='';
+        tb.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on',x===b); });
+        const t2=document.getElementById('instTip'); if(t2) t2.textContent=INST_TIP[v]||'';
+        const q2=document.getElementById('instQ'); if(q2) q2.value='';
+        const s2=document.getElementById('instInd'); if(s2) s2.value='';
+        instLoad(1);
+      };
+    });
+  }
+  instLoad(0);
+}
+/* 期次列表：直连东财 → 回落 CDN → 回落 Worker（三级逐层降级） */
+async function instLoadIdx(){
+  if(INST.idx&&Date.now()-INST.idxAt<3600*1000) return INST.idx;
+  try{
+    const r=await fetchT(INST_RD+'&columns=REPORT_DATE&pageNumber=1&pageSize=25&sortTypes=-1'
+      +'&sortColumns=REPORT_DATE&source=WEB&client=WEB',15000);
+    const j=await r.json();
+    const d=(j&&j.result&&j.result.data)||[];
+    if(d.length){
+      /* ⚠ 这个口只给日期、不给「多少只」，所以下拉里不显示只数 */
+      INST.idx=d.map(function(x){ return {d:String(x.REPORT_DATE).slice(0,10)}; });
+      INST.idxAt=Date.now();
+      return INST.idx;
+    }
+  }catch(e){}
+  const urls=[instCdn()+'/index.json', instBase()+'/v1/choice/snapshot/orghold/index'];
+  for(let i=0;i<urls.length;i++){
+    try{
+      const r=await fetchT(urls[i]+'?t='+Date.now(),15000);
+      if(!r.ok) continue;
+      const j=await r.json();
+      if(j&&j.list&&j.list.length){ INST.idx=j.list; INST.idxAt=Date.now(); break; }
+    }catch(e){}
+  }
+  return INST.idx;
+}
+/* 本地缓存（12 小时）：服务器那一份是**季报口径**、一个季度才变一次，
+   没必要每次开页都重拉；⚠ 写失败（配额满 / 隐私模式）静默放弃 —— 不是错。 */
+function instCk(key){ return 'td_inst_v2_'+key; }
+function instCGet(key){
+  try{
+    const o=JSON.parse(localStorage.getItem(instCk(key))||'null');
+    if(o&&o.items&&o.items.length&&(Date.now()-(o.at||0))<12*3600*1000) return o;
+  }catch(e){}
+  return null;
+}
+function instCSave(key,j){
+  try{ localStorage.setItem(instCk(key),JSON.stringify({d:j.d,ty:j.ty,n:j.n,items:j.items,at:Date.now()})); }catch(e){}
+}
+/* 拉整包：会话内存 → 本地缓存（12 小时）→ 服务器快照。
+   地址规则（⚠ 一律走**路径**，服务器与 Worker 的边缘缓存键都只认路径）：
+     type='0' → /v1/choice/snapshot/orghold[/<报告期>]
+     type≠'0' → /v1/choice/snapshot/orghold/<报告期>/<type>   （分类只有最新一期） */
+async function instLoad(force){
+  const key=INST.type+'|'+(INST.date||'latest');
+  if(!force){
+    if(INST_MEM[key]){ instRender(INST_MEM[key]); return; }
+    const lc=instCGet(key);
+    if(lc){ INST_MEM[key]=lc; instRender(lc); return; }
+  }
+  if(INST.busy) return;
+  INST.busy=true;
+  const gen=INST.gen;
+  /* ⚠ 一律**现取 DOM**、不缓存元素引用：切页签会重建 dbBody，
+     旧引用指向的节点已经不在文档里，往里写谁都看不见（就是这一次空白的成因之一）。 */
+  const el=function(){ return document.getElementById('instTable'); };
+  const fresh=function(){ return gen===INST.gen; };
+  const say=function(html){ const t=el(); if(t&&fresh()) t.innerHTML='<div class="empty">'+html+'</div>'; };
+  const base=instBase();
+  /* ⚠ 三条通道各自的失败原因都记下来，最后一起显示 —— 否则又是一路静默降级、
+     用户只看到最终报错、完全不知道哪一层挂的（2026-10-15 踩过）。必须在 try 外声明。 */
+  const fails=[];
+  try{
+    /* 先拿期次列表（只有几百字节，很快）→ 立刻把下拉填上，让界面先有反应 */
+    await instLoadIdx();
+    if(!fresh()){ INST.busy=false; return; }
+    instFillPeriods();
+    /* 选期 + 取第 1 页（合成一步）：
+       ⚠ 三季报 / 年报**刚开披露**时最新期只有十几二十只（2026-09-30 当时只有 22 只）——
+         直接用它会被误读成「数据缺失」。所以少于 1000 只就判为「还没披露完」，自动往前退一期。
+         这与服务器脚本 `_snapshot_orghold.py` 的 MIN_STOCKS 是同一套规则。
+       ⚠ 用户在下拉里**主动选了某期**就照做，不做跳过。 */
+    const L=INST.idx||[];
+    let dt=INST.date||'';
+    let p1=null;
+    if(dt){
+      p1=await fetchT(instRptUrl(INST.type,dt,1),15000).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    }else{
+      let best='', bestP=null, bestN=-1;
+      for(let i=0;i<Math.min(4,L.length);i++){
+        const p=await fetchT(instRptUrl(INST.type,L[i].d,1),15000).then(function(r){ return r.json(); }).catch(function(){ return null; });
+        const n=(p&&p.success&&p.result)?(p.result.count||0):-1;
+        if(n>bestN){ bestN=n; best=L[i].d; bestP=p; }
+        if(n>=1000){ dt=L[i].d; p1=p; break; }
+      }
+      if(!dt){ dt=best||(L[0]?L[0].d:''); p1=bestP; }
+    }
+    if(!dt) throw new Error('拿不到报告期列表');
+    say('加载中…<br>正在从东财取 <b>'+ces(dt)+'</b> 的全市场机构持仓，通常 <b>1~3 秒</b>。');
+    /* ① 主通道：**直连东财**（12 页并行，实测 ≈1.1 秒） */
+    let j=null;
+    try{
+      if(p1&&p1.success&&p1.result){
+        const pages=Math.min(p1.result.pages||1,20);
+        let rows=(p1.result.data||[]).slice();
+        if(pages>1){
+          const tasks=[];
+          for(let n=2;n<=pages;n++){
+            tasks.push(fetchT(instRptUrl(INST.type,dt,n),15000)
+              .then(function(r){ return r.json(); }).catch(function(){ return null; }));
+          }
+          const got=await Promise.all(tasks);
+          for(let i=0;i<got.length;i++){ const g=got[i]; if(g&&g.result&&g.result.data) rows=rows.concat(g.result.data); }
+        }
+        if(rows.length) j={d:dt,ty:INST.type,n:rows.length,items:rows.map(instSlim),src:'em'};
+        else fails.push('东财返回 0 条');
+      }else if(p1&&!p1.success){
+        fails.push('东财 '+(p1.code||'')+(p1.message?(' '+p1.message):''));
+      }else{
+        fails.push('东财无响应');
+      }
+    }catch(e){ fails.push('东财 '+String((e&&e.message)||e).slice(0,44)); }
+    /* ② 兜底一：CDN 快照 ｜ ③ 兜底二：Worker 转发的服务器快照 */
+    const seg=dt+(INST.type!=='0'?('.t'+INST.type):'');
+    if(!j){
+      try{
+        const r=await fetchT(instCdn()+'/'+seg+'.json?t='+Date.now(),20000);
+        if(r.ok){
+          const p=await r.json();
+          if(p&&p.items&&p.items.length){ j=p; j.src='cdn'; } else fails.push('CDN 内容为空');
+        }else fails.push('CDN HTTP '+r.status);
+      }catch(e){ fails.push('CDN '+String((e&&e.message)||e).slice(0,32)); }
+    }
+    if(!j){
+      try{
+        const path='/v1/choice/snapshot/orghold/'+dt+(INST.type!=='0'?('/'+INST.type):'');
+        const r=await fetchT(base+path+'?t='+Date.now(),45000);
+        const p=await r.json();
+        if(p&&p.items&&p.items.length){ j=p; j.src='worker'; }
+        else fails.push('服务器 '+String((p&&p.error)||('HTTP '+r.status)).slice(0,60));
+      }catch(e){ fails.push('服务器 '+String((e&&e.message)||e).slice(0,32)); }
+    }
+    if(!j) throw new Error('三条通道都没取到');
+    if(!fresh()){ INST.busy=false; return; }
+    INST.date=dt;
+    const pack={d:j.d,ty:j.ty||INST.type,n:j.n,items:j.items,src:j.src||'em'};
+    /* ⚠ 存**两个内存键**：进来时 key 是「类型|latest」（那会儿还不知道选哪期），
+       但加载完 INST.date 就有值了，下次进来的 key 变成「类型|2026-06-30」——
+       只存一个的话第二次必然 miss、又白跑一遍网络（2026-10-15 实测 491ms）。
+       localStorage 只存**具体期次**那份，省配额。 */
+    INST_MEM[key]=pack;
+    INST_MEM[INST.type+'|'+dt]=pack;
+    instCSave(INST.type+'|'+dt,pack);
+    instRender(pack);
+  }catch(e){
+    if(fresh()) say('❌ '+ces(String((e&&e.message)||e))
+      +'<br><span style="opacity:.72">各通道结果：'+ces(fails.join(' ｜ ')||'（无记录）')+'</span>'
+      +'<br><span style="opacity:.6">隔几秒切走再切回这个页签会重试。</span>');
+  }
+  INST.busy=false;
+}
+/* 报告期 → 人话（03-31 一季报 / 06-30 中报 / 09-30 三季报 / 12-31 年报） */
+function instPeriodName(d){
+  const s=String(d||'');
+  const md=s.slice(5);
+  const q=(md==='03-31')?'一季报':(md==='06-30')?'中报':(md==='09-30')?'三季报':(md==='12-31')?'年报':'';
+  return q?(s+' '+q):s;
+}
+/* 期次下拉：只有「全部机构」有历史多期；分类口径服务器只存最新一期 → 下拉禁用并写明 */
+function instFillPeriods(){
+  const sel=document.getElementById('instPeriod'); if(!sel) return;
+  const L=INST.idx||[];
+  if(INST.type!=='0'){
+    const cur=(INST_TYPES.filter(function(t){ return t[0]===INST.type; })[0]||['',''])[1];
+    sel.disabled=true;
+    sel.innerHTML='<option>'+(L[0]?instPeriodName(L[0].d):'—')+' · '+ces(cur)+'（仅最新期）</option>';
+    return;
+  }
+  sel.disabled=false;
+  if(!L.length){ sel.innerHTML='<option>—</option>'; return; }
+  sel.innerHTML=L.map(function(x){
+    /* ⚠ 只数（x.n）只有服务器快照那份 index 才带；直连东财拿到的期次列表没有 → 有就显示、没有就不显示 */
+    return '<option value="'+ces(x.d)+'">'+ces(instPeriodName(x.d))+(x.n?(' · '+x.n+' 只'):'')+'</option>';
+  }).join('');
+  sel.value=(INST.date&&L.some(function(x){ return x.d===INST.date; }))?INST.date:L[0].d;
+}
+function instRender(j){
+  INST.pack=j;                           /* ⚠ 必须存下来 —— instPrep 从这里取整包 */
+  INST.objs=null; INST.inds=null;        /* 换了整包 → 派生数据全部重建 */
+  const cards=document.getElementById('instCards');
+  if(cards){
+    const IT=j.items||[];
+    let tot=0, n30=0, up=0, dn=0;
+    for(let i=0;i<IT.length;i++){
+      const x=IT[i];
+      tot+=(+x[3]||0);
+      if((+x[4]||0)>=30) n30++;
+      if((+x[6]||0)>0) up++; else if((+x[6]||0)<0) dn++;
+    }
+    const cur=(INST_TYPES.filter(function(t){ return t[0]===INST.type; })[0]||['0',''])[1];
+    const L=INST.idx||[];
+    cards.innerHTML=''
+      +dbCard('报告期', instPeriodName(j.d), cur+' 口径 · 季报披露', 0)
+      +dbCard('覆盖个股', String(j.n||0)+' 只', '机构合计持仓 '+(tot/1e8).toFixed(0)+' 亿元', 0)
+      +dbCard('机构重仓', String(n30)+' 只', '占流通 ≥30%（占 '+((n30/(j.n||1))*100).toFixed(1)+'%）', 1)
+      +dbCard('本期增 / 减', up+' / '+dn, '按持股数变动方向统计（只）', 0)
+      +dbCard('已收录', (INST.type==='0'&&L.length>1)?(L.length+' 期'):('1 期'),
+        (INST.type==='0'&&L.length>1)
+          ? ('最早 '+(L[L.length-1].d||'—')+' · 切期次可看变化')
+          : '分类口径只存最新一期', 0);
+  }
+  /* 只在**走了备用通道**时才提示 —— 正常直连东财就保持界面干净 */
+  const nt=document.getElementById('instNote');
+  if(nt) nt.innerHTML=(j.src&&j.src!=='em')
+    ? '<div class="inst-tip" style="margin:0 0 8px">⚠ 东财直连不可用，本次走的是备用通道'
+      +(j.src==='cdn'?'（CDN 快照）':'（服务器快照，较慢）')+'</div>'
+    : '';
+  instFillPeriods();
+  /* 换了口径 → 行业下拉必须重填 */
+  const s3=document.getElementById('instInd');
+  if(s3) s3.innerHTML='<option value="">全部行业</option>';
+  instPaint();
+}
+/* 数组行 → 对象行（只转一次，重绘时复用；5576 行每次重绘都转会白费） */
+function instPrep(){
+  if(INST.objs) return INST.objs;
+  /* ⚠ 取 INST.pack（instRender 存进来的那一份），**不能**写 INST_MEM[INST.type] ——
+     INST_MEM 的键是「类型|期次」，用类型直接索引永远取不到 → 表格空白
+     （2026-10-15 用户报「数据出不来」的成因之一，卡片能渲染、表格却一行都没有）。 */
+  const j=INST.pack; if(!j||!j.items) return null;
+  INST.objs=j.items.map(function(it){
+    const nOrg=+it[2]||0, val=(+it[3]||0)/1e8;
+    /* avg = 户均持仓（万元）。⚠ 这个字段是**识别噪音的关键**：次新股上市时几千家基金
+       打新各拿几百股，机构家数能上 3000+，但户均只有一两万元 —— 那不是「机构重仓」。 */
+    return {code:String(it[0]), name:String(it[1]), nOrg:nOrg, val:val,
+      avg:nOrg>0?(val*1e4/nOrg):0, ind:instInd(it[0]),
+      fr:+it[4]||0, tr:+it[5]||0, cha:(+it[6]||0)/1e4, chav:(+it[7]||0)/1e8};
+  });
+  return INST.objs;
+}
+/* 行业下拉：选项 = 当前整包里实际出现的行业，按只数降序（查不到行业的归「未分类」） */
+function instFillInd(){
+  const sel=document.getElementById('instInd'); if(!sel) return;
+  if(!INST.inds){
+    const objs=INST.objs||[], m={};
+    for(let i=0;i<objs.length;i++){ const k=objs[i].ind||'未分类'; m[k]=(m[k]||0)+1; }
+    /* 「未分类」永远沉底 —— 它数量最多（新股 / SEC_MAP 没收录的），排第一会挡住真行业 */
+    INST.inds=Object.keys(m).map(function(k){ return [k,m[k]]; }).sort(function(a,b){
+      if((a[0]==='未分类')!==(b[0]==='未分类')) return a[0]==='未分类'?1:-1;
+      return b[1]-a[1];
+    });
+  }
+  if(sel.options.length<=1){
+    sel.innerHTML='<option value="">全部行业</option>'+INST.inds.map(function(x){
+      return '<option value="'+ces(x[0])+'">'+ces(x[0])+'（'+x[1]+'）</option>';
+    }).join('');
+    sel.value=INST.ind||'';
+  }
+}
+function instPaint(){
+  const box=document.getElementById('instTable'); if(!box) return;
+  const objs=instPrep(); if(!objs) return;
+  instFillInd();
+  const q=(INST.q||'').trim().toLowerCase();
+  let rows=objs;
+  if(INST.ind) rows=rows.filter(function(o){ return (o.ind||'未分类')===INST.ind; });
+  if(q) rows=rows.filter(function(o){ return o.code.indexOf(q)>=0||o.name.toLowerCase().indexOf(q)>=0; });
+  const total=rows.length;
+  rows=snapSort(rows,INST,'name');
+  /* 行业列**故意不给排序键**（snapSort 只认数字和 name 列，给 ind 会全部沉底） */
+  const COLS=[{k:'name',t:'股票',lft:1},{t:'行业',lft:1},{k:'nOrg',t:'机构家数'},
+    {k:'avg',t:'户均(万元)'},
+    {k:'val',t:'持股市值(亿)'},{k:'fr',t:'占流通(%)'},{k:'tr',t:'占总股本(%)'},
+    {k:'cha',t:'持股变动(万股)'},{k:'chav',t:'变动市值(亿)'}];
+  const show=rows.slice(0,INST.limit);
+  const cur=(INST_TYPES.filter(function(t){ return t[0]===INST.type; })[0]||['0','全部机构'])[1];
+  const skName=(COLS.filter(function(c){ return c.k===INST.sk; })[0]||{t:'机构家数'}).t;
+  let h='<div class="panel"><h3>机构持仓排行 <span style="font-size:12px;color:var(--muted);font-weight:400">'
+    +ces(cur)+' · 排序：'+ces(skName)+(INST.sd<0?' 降序':' 升序')+'</span></h3>'
+    +'<p class="panel-sub">点表头排序；上方可搜代码 / 名称、按行业筛。'
+    +'<b>占流通比越高 = 筹码越集中在机构手里</b>。</p>'
+    +'<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'+snapTh(INST,COLS)+'</tr></thead><tbody>'
+    + (show.length?show.map(function(o){
+        const cha=o.cha, chav=o.chav;
+        /* 户均 < 100 万元 → 淡化：这是打新 / 指数被动持有的零头，不是「机构重仓」 */
+        const at=o.avg.toFixed(o.avg>=100?0:1);
+        const avgH=(o.avg>0&&o.avg<100)
+          ? '<span style="opacity:.42" title="户均不足 100 万元，多为打新 / 指数被动持有的零头">'+at+'</span>'
+          : at;
+        return '<tr data-c="'+ces(o.code)+'" data-n="'+ces(o.name)+'" style="cursor:pointer" title="点这行看它跨报告期的变化">'
+          +'<td class="lft"><b>'+ces(o.name)+'</b> <span style="opacity:.45">'+ces(o.code)+'</span></td>'
+          +'<td class="lft">'+(o.ind?ces(o.ind):'—')+'</td>'
+          +'<td>'+o.nOrg+'</td><td>'+avgH+'</td>'
+          +'<td>'+o.val.toFixed(2)+'</td><td>'+o.fr.toFixed(2)+'</td><td>'+o.tr.toFixed(2)+'</td>'
+          +'<td class="'+FCLS(cha)+'">'+(cha>0?'+':'')+cha.toFixed(0)+'</td>'
+          +'<td class="'+FCLS(chav)+'">'+(chav>0?'+':'')+chav.toFixed(2)+'</td>'
+          +'</tr>';
+      }).join('') : '<tr><td colspan="9" class="lft" style="padding:14px;opacity:.6">没有匹配的标的 —— 换个关键词或行业试试</td></tr>')
+    +'</tbody></table></div>'
+    +(total>show.length
+      ? '<div class="inst-more"><button class="btn secondary" id="instMore">显示更多（已显示 '+show.length+' / '+total+'）</button></div>'
+      : '<p style="font-size:11.5px;color:var(--muted);margin:8px 0 0">共 '+total+' 只'+(INST.ind||q?'（已筛选）':'')+'，已全部显示</p>')
+    +'</div>';
+  box.innerHTML=h;
+  snapBindTh(box,INST,instPaint);
+  const mb=document.getElementById('instMore');
+  if(mb) mb.onclick=function(){ INST.limit+=200; instPaint(); };
+  /* 点某一行 → 展开它的跨期变化（同一行再点一次收起） */
+  box.querySelectorAll('tr[data-c]').forEach(function(tr){
+    if(INST.hcode&&tr.getAttribute('data-c')===INST.hcode){
+      tr.style.background='rgba(95,168,255,.10)';
+    }
+    tr.onclick=function(){ instHist(tr.getAttribute('data-c'), tr.getAttribute('data-n')); };
+  });
+}
+/* 极简 SVG 折线（就 8 个点，不值得为它拉 1MB 的 ECharts） */
+function instSpark(vals,w,h){
+  const n=vals.length; if(n<2) return '';
+  const mx=Math.max.apply(null,vals), mn=Math.min.apply(null,vals), rg=(mx-mn)||1;
+  const pts=vals.map(function(v,i){
+    const x=(i/(n-1))*(w-6)+3;
+    const y=h-3-((v-mn)/rg)*(h-6);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  return '<svg width="'+w+'" height="'+h+'" style="vertical-align:middle"><polyline points="'+pts
+    +'" fill="none" stroke="#8cc4ff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+}
+/* 某只股票的跨报告期变化：服务器 /snapshot/orghold/hist/<代码> 现算（读各期文件） */
+async function instHist(code,name){
+  const box=document.getElementById('instHist'); if(!box) return;
+  if(INST.hcode===code){ INST.hcode=''; box.innerHTML=''; instPaint(); return; }   /* 再点收起 */
+  INST.hcode=code;
+  instPaint();                                    /* 先把选中行高亮出来 */
+  box.innerHTML='<div class="panel"><p class="panel-sub">正在取 '+ces(name)+' 的跨期数据…</p></div>';
+  try{
+    /* ① 直连东财：按代码筛，**一次拿回该股所有报告期**（不必走服务器那份 hist 接口） */
+    let j=null;
+    try{
+      const f='(SECURITY_CODE="'+code+'")(ORG_TYPE="'+instOrgT(INST.type)+'")';
+      const u=INST_RT+'&columns=ALL&pageNumber=1&pageSize=100&sortColumns=REPORT_DATE&sortTypes=-1'
+        +'&source=WEB&client=WEB&filter='+encodeURIComponent(f);
+      const p=await fetchT(u,15000).then(function(r){ return r.json(); });
+      if(p&&p.success&&p.result&&p.result.data&&p.result.data.length){
+        j={code:code,name:p.result.data[0].SECURITY_NAME_ABBR,
+           list:p.result.data.map(function(x){
+             return {d:String(x.REPORT_DATE).slice(0,10),nOrg:x.HOULD_NUM||0,val:x.HOLD_VALUE||0,
+               fr:x.FREESHARES_RATIO||0,tr:x.TOTALSHARES_RATIO||0,
+               cha:x.HOLDCHA_NUM||0,chav:x.HOLDCHA_VALUE||0};
+           })};
+      }
+    }catch(e){}
+    /* ② 兜底：服务器 hist 接口 */
+    if(!j){
+      const r=await fetchT(instBase()+'/v1/choice/snapshot/orghold/hist/'+encodeURIComponent(code),20000);
+      j=await r.json();
+    }
+    if(!j||!j.list||!j.list.length) throw new Error('这只票没有收录到历史期次');
+    const L=j.list.slice().sort(function(a,b){ return a.d<b.d?-1:1; });   /* 时间升序，画图用 */
+    const vals=L.map(function(x){ return +x.nOrg||0; });
+    const d0=vals[0], d1=vals[vals.length-1];
+    let h='<div class="panel"><h3>'+ces(j.name||name)
+      +' <span style="font-size:12px;color:var(--muted);font-weight:400">'+ces(code)
+      +' · 机构持仓跨期变化（'+L.length+' 期）</span></h3>'
+      +'<p class="panel-sub">机构家数 '+instSpark(vals,180,28)+' <b>'+d0+' → '+d1+'</b> 家（'
+      +((d1-d0>=0)?'+':'')+(d1-d0)+'）；<b>点标题行可收起</b></p>'
+      +'<div class="sec-wrap"><table class="mkt-tb"><thead><tr>'
+      +'<th class="lft">报告期</th><th>机构家数</th><th>户均(万元)</th><th>持股市值(亿)</th>'
+      +'<th>占流通(%)</th><th>占总股本(%)</th><th>持股变动(万股)</th></tr></thead><tbody>'
+      + L.slice().reverse().map(function(x){          /* 表格从新到旧，和上面的期次下拉一致 */
+          const val=(+x.val||0)/1e8, nOrg=+x.nOrg||0, cha=(+x.cha||0)/1e4;
+          const avg=nOrg?(val*1e4/nOrg):0;
+          return '<tr><td class="lft">'+ces(instPeriodName(x.d))+'</td>'
+            +'<td>'+nOrg+'</td>'
+            +'<td>'+((avg>0&&avg<100)?('<span style="opacity:.42" title="户均不足 100 万元，多为打新 / 被动持有">'+(avg>=100?avg.toFixed(0):avg.toFixed(1))+'</span>'):(avg?avg.toFixed(avg>=100?0:1):'—'))+'</td>'
+            +'<td>'+val.toFixed(2)+'</td><td>'+((+x.fr||0)).toFixed(2)+'</td><td>'+((+x.tr||0)).toFixed(2)+'</td>'
+            +'<td class="'+FCLS(cha)+'">'+((cha>0?'+':'')+cha.toFixed(0))+'</td></tr>';
+        }).join('')
+      +'</tbody></table></div>'
+      +'<p style="font-size:11.5px;color:var(--muted);margin:8px 0 0">'
+      +'⚠ 家数突增多半是<b>打新 / 指数纳入</b>带来的零头（看户均那一列），突降才是真减持。</p></div>';
+    box.innerHTML=h;
+  }catch(e){
+    box.innerHTML='<div class="panel"><p class="panel-sub">❌ '+ces(String((e&&e.message)||e))+'</p></div>';
+  }
 }
 function predInit(){
   const box=document.getElementById('dbBody'); if(!box) return;
