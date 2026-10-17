@@ -7305,10 +7305,6 @@ const INST_TIP={'0':'全部机构合并计数（基金 / 社保 / QFII / 保险 
   '1':'公募基金，含 ETF / 指数基金（被动持有也算，不代表主动看好）',
   '2':'合格境外机构投资者','3':'全国社保基金组合','4':'证券公司自营','5':'保险资金','6':'信托计划'};
 function instBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
-/* 数据**主通道**：GitHub Pages 上的快照（走全球 CDN，比「服务器 → CF 隧道」那条快一两个数量级）。
-   文件放在 site 仓库的 data/orghold/ 下（那个仓库只推 index.html，不会清目录）。
-   Worker 的 /v1/choice/snapshot/orghold 作**兜底**：CDN 拿不到时自动回落，用户无感。 */
-function instCdn(){ return 'https://conglingkaishi3674.com/data/orghold'; }
 /* ===== 主通道：**浏览器直连东财数据中心** =====
    `datacenter-web.eastmoney.com` 带 `Access-Control-Allow-Origin: *` ⇒ 跨域可直连（已实测）。
    ⚠ 为什么不用 `data.eastmoney.com/dataapi/zlsj/list`：那是东财自己的服务端代理，**没有 CORS 头**，
@@ -7422,7 +7418,7 @@ async function instLoadIdx(){
       return INST.idx;
     }
   }catch(e){}
-  const urls=[instCdn()+'/index.json', instBase()+'/v1/choice/snapshot/orghold/index'];
+  const urls=[instBase()+'/v1/choice/snapshot/orghold/index'];
   for(let i=0;i<urls.length;i++){
     try{
       const r=await fetchT(urls[i]+'?t='+Date.now(),15000);
@@ -7519,17 +7515,11 @@ async function instLoad(force){
         fails.push('东财无响应');
       }
     }catch(e){ fails.push('东财 '+String((e&&e.message)||e).slice(0,44)); }
-    /* ② 兜底一：CDN 快照 ｜ ③ 兜底二：Worker 转发的服务器快照 */
-    const seg=dt+(INST.type!=='0'?('.t'+INST.type):'');
-    if(!j){
-      try{
-        const r=await fetchT(instCdn()+'/'+seg+'.json?t='+Date.now(),20000);
-        if(r.ok){
-          const p=await r.json();
-          if(p&&p.items&&p.items.length){ j=p; j.src='cdn'; } else fails.push('CDN 内容为空');
-        }else fails.push('CDN HTTP '+r.status);
-      }catch(e){ fails.push('CDN '+String((e&&e.message)||e).slice(0,32)); }
-    }
+    /* ② 兜底：Worker 转发的**服务器快照**（服务器脚本每天 10:30 抓，是新鲜的）。
+       ⚠ GitHub Pages 那份 CDN 副本已于 2026-10-18 **移除** —— 它没有自动推送（服务器 token 权限不够），
+         抓完一直没更新、静默过期 3 天；而且兜底时它排在第一位，会**先返回一份格式合法但内容过期的旧数据**
+         （不报错、最难发现）。用户拍板：直连东财够快够稳，这份副本不要了。
+         现在兜底只剩服务器这一层。 */
     if(!j){
       try{
         const path='/v1/choice/snapshot/orghold/'+dt+(INST.type!=='0'?('/'+INST.type):'');
@@ -7608,7 +7598,7 @@ function instRender(j){
   const nt=document.getElementById('instNote');
   if(nt) nt.innerHTML=(j.src&&j.src!=='em')
     ? '<div class="inst-tip" style="margin:0 0 8px">⚠ 东财直连不可用，本次走的是备用通道'
-      +(j.src==='cdn'?'（CDN 快照）':'（服务器快照，较慢）')+'</div>'
+      +'（服务器快照，较慢）</div>'
     : '';
   instFillPeriods();
   /* 换了口径 → 行业下拉必须重填 */
