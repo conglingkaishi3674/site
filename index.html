@@ -5839,7 +5839,7 @@ function chanceAuto(){
 /* gen：加载代次。切页签时 +1，让**在途的旧请求**作废 —— 否则会出现
    「不等股指刷新完就点板块数据 → 旧响应回来把股指数据画到板块页签上」
    （2026-09-30 用户报的 bug）。每个 await 之后都要比对 gen，不一致就丢弃结果。 */
-const DB={product:'IM', date:'', contract:'', busy:false, tab:'ccpm', view:'stock', gen:0};
+const DB={product:'IM', date:'', contract:'', busy:false, busyAt:0, tab:'ccpm', view:'stock', gen:0};
 function dbBase(){ return (typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com'; }
 function dbToday(){ const d=new Date();
   return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
@@ -5848,6 +5848,33 @@ function dbShift(ds,n){
   return t.getFullYear()+String(t.getMonth()+1).padStart(2,'0')+String(t.getDate()).padStart(2,'0');
 }
 function dbPretty(ds){ return ds.slice(0,4)+'-'+ds.slice(4,6)+'-'+ds.slice(6,8); }
+/* ⚠ 2026-10-21 新增：按「有存档的日期列表」翻页（而不是机械地 ±1 天）。
+   起因：data/hist 里 10-19 缺档，从 10-20 点「上一日」目标 10-19 → 请求失败 → DB.date 不更新
+   → 再点还是 10-20→10-19，无论点几次都停在原地（用户报「连点两次也不切换」）。
+   现在按服务器实际有存档的日子跳，永远不会落到空档上。 */
+let _dbDates=null, _dbDatesAt=0;
+async function dbDates(){
+  if(_dbDates && Date.now()-_dbDatesAt < 300000) return _dbDates;   /* 5 分钟缓存 */
+  try{
+    const j=await fetchT(snapBase()+'/v1/choice/snapshot/dates?t='+Date.now(),8000)
+      .then(function(r){ return r.json(); });
+    if(j && j.ok && Array.isArray(j.dates) && j.dates.length){
+      _dbDates=j.dates; _dbDatesAt=Date.now(); return _dbDates;
+    }
+  }catch(e){}
+  return _dbDates || [];
+}
+/* 按列表步进；返回 '' 表示「到头了」或「拿不到列表」 */
+async function dbStep(dir){
+  const list=await dbDates();
+  if(!list.length) return '';
+  const cur=String(DB.date||'').slice(0,10);
+  let i=list.indexOf(cur);
+  if(i<0) i=list.length-1;                       /* 当前日不在列表（首次进入）→ 视作最后一天 */
+  const k=i+dir;
+  if(k<0 || k>=list.length) return '';
+  return list[k];
+}
 const FN=v=>Math.round(v||0).toLocaleString('en-US');
 const FDL=v=>((v||0)>0?'+':'')+Math.round(v||0).toLocaleString('en-US');
 const FCLS=v=>(v||0)>0?'db-up':((v||0)<0?'db-dn':'');
@@ -6254,8 +6281,15 @@ async function dbLoad(dir){
      在途的旧请求醒来时 gen 已经变了 → 结果全部丢弃，不会再画到新页签上。
      （2026-09-30 用户报的 bug：不等股指刷新完就点板块数据，旧响应回来把股指数据
        画到了板块页签上 —— 就是因为旧请求只认进入时的 tab，渲染时不再校验。） */
-  if(DB.busy) return;
-  DB.busy=true;
+  if(DB.busy){
+    /* ⚠ 2026-10-21：busy 一旦卡住，整个页签点哪个板块都没反应（用户报「几个板块都没反应」）。
+       加时间窗自愈：持有超过 25 秒视为僵死，强制释放。
+       （正常一次加载最慢也就 8 秒左右，25 秒足够宽松，不会误伤正在跑的请求。）
+       ⚠ 旧请求回来时 gen 已经变了，会被各处 `if(gen!==DB.gen) return` 丢掉，不会画错数据。 */
+    if(Date.now()-(DB.busyAt||0) < 25000) return;
+    DB.busy=false;
+  }
+  DB.busy=true; DB.busyAt=Date.now();
   const gen=++DB.gen;
   dir=dir||0;
   /* 先秒出上次那份数据（翻页时跳过 —— 那次用户明确要看别的日期，拿缓存反而误导） */
@@ -6263,11 +6297,13 @@ async function dbLoad(dir){
     const cj=dbCacheGet(DB.tab);
     if(cj){ try{ dbSetFromCache(DB.tab,cj); }catch(e){} }
   }
-  /* 大盘数据是「整段快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 走独立路径 */
+  /* 大盘数据是「整段快照」（近一年 + 最新交易日），没有逐日翻页的概念 → 走独立路径。
+     ⚠ 2026-10-21：sector/national/etf 现在**都支持翻页**，必须把 `dir` 透传下去 ——
+        当初只改了三个函数签名、忘了改这里，结果「上一日/下一日」点了毫无反应（参数为 undefined）。 */
   if(DB.tab==='mkt'){ await dbLoadMkt(gen); if(gen===DB.gen) DB.busy=false; return; }
-  if(DB.tab==='sector'){ await dbLoadSector(gen); if(gen===DB.gen) DB.busy=false; return; }
-  if(DB.tab==='national'){ await dbLoadNational(gen); if(gen===DB.gen) DB.busy=false; return; }
-  if(DB.tab==='etf'){ await dbLoadEtf(gen); if(gen===DB.gen) DB.busy=false; return; }
+  if(DB.tab==='sector'){ await dbLoadSector(gen, dir); if(gen===DB.gen) DB.busy=false; return; }
+  if(DB.tab==='national'){ await dbLoadNational(gen, dir); if(gen===DB.gen) DB.busy=false; return; }
+  if(DB.tab==='etf'){ await dbLoadEtf(gen, dir); if(gen===DB.gen) DB.busy=false; return; }
   const hint=document.getElementById('dbHint'), box=document.getElementById('dbBody');
   const sel=document.getElementById('dbProduct'); if(sel) DB.product=sel.value;
   const today=dbToday();
@@ -6531,17 +6567,32 @@ function snapBindEtfRows(box,ncols){
     tr.onclick=function(e){ e.stopPropagation(); snapChartToggle(tr,ncols); };
   });
 }
-async function dbLoadNational(gen){
+/* ⚠ 2026-10-21 同 `dbLoadEtf`：支持 `dir` 翻页（服务器侧 `?date=` 已就绪）。 */
+async function dbLoadNational(gen, dir){
   if(gen==null) gen=DB.gen;
+  dir=dir||0;
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
+  let target='';
+  if(dir){
+    /* 按「有存档的日期列表」跳，跳过缺档日；'' = 到头了 */
+    target=await dbStep(dir);
+    if(!target){
+      if(hint) hint.textContent=(dir<0?'已经是最早的存档日':'已经是最新的存档日');
+      if(gen===DB.gen) DB.busy=false;
+      return;
+    }
+  }
   if(hint) hint.textContent='取数中…';
   if(box) box.innerHTML='<div class="empty">加载中…（读盘后快照）</div>';
   try{
-    const r=await fetchT(snapBase()+'/v1/choice/snapshot/national?t='+Date.now(),12000);
+    const q=(target?'?date='+encodeURIComponent(target)+'&':'?')+'t='+Date.now();
+    const r=await fetchT(snapBase()+'/v1/choice/snapshot/national'+q,12000);
     const j=await r.json();
     if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果 */
-    if(!j||!j.groups||!j.groups.length) throw new Error('快照还没有数据（盘后自动生成）');
-    DB.last=j; dbCacheSet(DB.tab,j); nationalRender(j);
+    if(!j||!j.groups||!j.groups.length) throw new Error('这一天没有存档（'+(target||'最新')+'）');
+    DB.last=j; DB.date=j.day; dbCacheSet(DB.tab,j); nationalRender(j);
+    const el=document.getElementById('dbDate');
+    if(el) el.value=dbPretty(String(j.day).replace(/-/g,''));
     if(hint) hint.textContent='已加载 国家队动向 · '+j.day+'（对比 '+j.prev+'）· 交易所份额口径';
   }catch(e){
     if(gen!==DB.gen) return;
@@ -6549,17 +6600,34 @@ async function dbLoadNational(gen){
     if(hint) hint.textContent='加载失败';
   }
 }
-async function dbLoadEtf(gen){
+/* ⚠ 2026-10-21 加日期翻页：`dir` 来自 `dbLoad(dir)` 的分发（-1 上一日 / +1 下一日 / 0 刷新）。
+   服务器侧已支持 `?date=YYYY-MM-DD`（读 data/hist/<date>/etf.json），不带 date 则读最新。
+   ⚠ 翻页后**必须 `DB.date=j.day`** —— 否则下一次翻页没有基准，会一直原地打转。 */
+async function dbLoadEtf(gen, dir){
   if(gen==null) gen=DB.gen;
+  dir=dir||0;
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
+  let target='';
+  if(dir){
+    /* 按「有存档的日期列表」跳，跳过缺档日；'' = 到头了 */
+    target=await dbStep(dir);
+    if(!target){
+      if(hint) hint.textContent=(dir<0?'已经是最早的存档日':'已经是最新的存档日');
+      if(gen===DB.gen) DB.busy=false;
+      return;
+    }
+  }
   if(hint) hint.textContent='取数中…';
   if(box) box.innerHTML='<div class="empty">加载中…（读盘后快照）</div>';
   try{
-    const r=await fetchT(snapBase()+'/v1/choice/snapshot/etf?t='+Date.now(),12000);
+    const q=(target?'?date='+encodeURIComponent(target)+'&':'?')+'t='+Date.now();
+    const r=await fetchT(snapBase()+'/v1/choice/snapshot/etf'+q,12000);
     const j=await r.json();
     if(gen!==DB.gen) return;
-    if(!j||!j.items||!j.items.length) throw new Error('快照还没有数据（盘后自动生成）');
-    DB.last=j; dbCacheSet(DB.tab,j); etfRender(j);
+    if(!j||!j.items||!j.items.length) throw new Error('这一天没有存档（'+(target||'最新')+'）');
+    DB.last=j; DB.date=j.day; dbCacheSet(DB.tab,j); etfRender(j);
+    const el=document.getElementById('dbDate');
+    if(el) el.value=dbPretty(String(j.day).replace(/-/g,''));
     if(hint) hint.textContent='已加载 ETF 申赎 · '+j.day+'（对比 '+j.prev+'）· '+j.items.length+' 个行业 · 交易所份额口径';
   }catch(e){
     if(gen!==DB.gen) return;
@@ -6728,18 +6796,34 @@ function secSortRows(list){
     return (+va-+vb)*d;
   });
 }
-async function dbLoadSector(gen){
+/* ⚠ 2026-10-21 加日期翻页：Worker 的 `/v1/sector/overview` 已支持 `?date=`（服务端逐日调 dc_daily）。
+   ⚠ 它比别的接口重（实测 8 秒 / 207KB），所以**翻页时不要带 fresh=1**，让它吃边缘缓存。 */
+async function dbLoadSector(gen, dir){
   if(gen==null) gen=DB.gen;   /* 兜底：板块参数变更处是直接调 dbLoadSector()，不传代次 */
+  dir=dir||0;
   const box=document.getElementById('dbBody'), hint=document.getElementById('dbHint');
+  let target='';
+  if(dir){
+    /* 按「有存档的日期列表」跳，跳过缺档日；'' = 到头了 */
+    target=await dbStep(dir);
+    if(!target){
+      if(hint) hint.textContent=(dir<0?'已经是最早的存档日':'已经是最新的存档日');
+      if(gen===DB.gen) DB.busy=false;
+      return;
+    }
+  }
   if(hint) hint.textContent='取数中…';
   if(box) box.innerHTML='<div class="empty">加载中…（拉近 11 个交易日的板块成交额 + 当日资金流，首次约 6 秒）</div>';
   try{
     const base=(typeof API!=='undefined'&&API)?API:'https://api.conglingkaishi3674.com';
-    const r=await fetch(base+'/v1/sector/overview?min='+encodeURIComponent(_secState.min),{cache:'no-store'});
+    const r=await fetch(base+'/v1/sector/overview?min='+encodeURIComponent(_secState.min)
+      +(target?('&date='+encodeURIComponent(target)):''),{cache:'no-store'});
     const j=await r.json();
     if(gen!==DB.gen) return;                 /* 期间切了页签 → 丢弃结果，不渲染 */
     if(!j||!j.ok) throw new Error((j&&j.error)||('HTTP '+r.status));
-    DB.last=j; dbCacheSet(DB.tab,j); sectorRender(j);
+    DB.last=j; DB.date=j.last; dbCacheSet(DB.tab,j); sectorRender(j);
+    const el=document.getElementById('dbDate');
+    if(el) el.value=dbPretty(String(j.last).replace(/-/g,''));
     if(hint) hint.textContent='已加载 板块数据 · '+dbPretty(j.last)+' · '+j.total+' 个板块（已剔除成分股 < '+j.minStocks+' 的与统计篮子）';
   }catch(e){
     if(gen!==DB.gen) return;
@@ -7355,9 +7439,21 @@ async function chanceScanAll(){
   const go=document.getElementById('dbGo');
   if(go) go.onclick=function(){ DB.date=''; dbLoad(0); };                      // 刷新＝回到最近有数据的那天
   const pv=document.getElementById('dbPrev');
-  if(pv) pv.onclick=function(){ dbLoad(-1); };
+  /* ⚠ 2026-10-21：点击后**立刻**在提示区写反馈。
+     这样能一眼区分两种"没反应"：
+       · 连这行提示都不变 → 说明跑的是旧 JS（没刷新），或者按钮没绑上
+       · 提示变了但日期不动 → 是真的请求失败/到头了，能顺着查 */
+  if(pv) pv.onclick=function(){
+    const h=document.getElementById('dbHint');
+    if(h) h.textContent='⏳ 正在查找上一个存档日…（DB v2026-10-21c）';
+    dbLoad(-1);
+  };
   const nx=document.getElementById('dbNext');
-  if(nx) nx.onclick=function(){ dbLoad(1); };
+  if(nx) nx.onclick=function(){
+    const h=document.getElementById('dbHint');
+    if(h) h.textContent='⏳ 正在查找下一个存档日…（DB v2026-10-21c）';
+    dbLoad(1);
+  };
   const pd=document.getElementById('dbProduct');
   if(pd) pd.onchange=function(){ DB.date=''; dbLoad(0); };
   /* 三个页签：股指期货持仓 / 龙虎榜 / 大盘数据。切页签要清掉上一天的缓存与展开状态，按最近交易日重载 */
@@ -7409,11 +7505,19 @@ async function chanceScanAll(){
       const hint0=document.getElementById('dbHint'); if(hint0) hint0.style.display='';
       const isLhb=(t==='lhb'), isMkt=(t==='mkt'), isSec=(t==='sector');
       const isNat=(t==='national'), isEtf=(t==='etf');
-      /* 「整段快照」类：内容是一整段（不是逐日翻页），日期导航与品种选择都要收起 */
-      const isSnap=isMkt||isSec||isNat||isEtf;
-      const pw=document.getElementById('dbProductWrap'); if(pw) pw.style.display=(isLhb||isSnap)?'none':'';
+      /* 「整段快照」类：内容是一整段（不是逐日翻页），日期导航与品种选择都要收起。
+         ⚠ 2026-10-21：**板块数据 / 国家队动向 / ETF 申赎 都已支持按日期翻页**
+            （服务器 `?date=` + Worker `?date=` 都就绪），只剩「大盘」还是真正的整段快照
+            （近一年走势 + 最新交易日，没有逐日概念）。 */
+      const isSnap=isMkt;
+      /* ⚠ 品种选择器（那个 `IM · 中证1000` 下拉）**只有股指期货持仓(ccpm)才需要**。
+         2026-10-21 用户报「国家队动向里冒出 IM·中证1000」—— 根因是我把 national/etf/sector
+         移出 isSnap 之后，这里的 `(isLhb||isSnap)` 条件就不再挡住它们了。
+         ⇒ 直接按页签判断，只给 ccpm 显示，避免以后再被 isSnap 的语义变化牵连。 */
+      const pw=document.getElementById('dbProductWrap');
+      if(pw) pw.style.display=(t==='ccpm')?'':'none';
       const lv=document.getElementById('lhbView'); if(lv) lv.style.display=isLhb?'':'none';
-      const n1=document.getElementById('dbNoteCcpm'); if(n1) n1.style.display=(isLhb||isSnap)?'none':'';
+      const n1=document.getElementById('dbNoteCcpm'); if(n1) n1.style.display=(t==='ccpm')?'':'none';   /* 同上：只属于股指期货页 */
       const n2=document.getElementById('dbNoteLhb'); if(n2) n2.style.display=isLhb?'':'none';
       const n3=document.getElementById('dbNoteMkt'); if(n3) n3.style.display=isMkt?'':'none';
       const n4=document.getElementById('dbNoteNational'); if(n4) n4.style.display=isNat?'':'none';
