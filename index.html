@@ -5271,7 +5271,17 @@ function chanceIsTradingToday(){ try{ return isTradingDay(new Date()); }catch(e)
 function chanceBaseDayOf(days){
   const today=chanceToday().replace(/-/g,'');
   const d0=String((days&&days[0])||'').replace(/-/g,'');
-  CHANCE.baseDay = chanceIsTradingToday() ? today : (d0||today);   /* 记下来供界面标注 */
+  /* ⚠ 交易日还要看「时刻」：凌晨（还没到当天行情产生的时间）虽然日历上是交易日，
+     但今天的日线/实时行情都还没出现 —— 这时硬把 baseDay 设成「今天」，hasToday 会判成
+     false、跑去取不存在的「今天实时行情」→ 全市场都是「尚未开盘」→ 报「今天还没有行情」。
+     用户 2026-11-12 凌晨 01:32 踩到：11-12 是交易日，但行情是 11-11 收盘的。
+     修法：交易日但当前还没到集合竞价（9:15），就回退到日线表最新那根（= 最近收盘日）。
+     9:15 之后（盘前竞价起）今天的行情开始产生，才用「今天」。 */
+  const now=new Date();
+  const mins=now.getHours()*60+now.getMinutes();
+  const dayStarted = mins>=555;            /* 9:15 起，今天的行情开始产生 */
+  const isTD = chanceIsTradingToday();
+  CHANCE.baseDay = (isTD && dayStarted) ? today : (d0||today);   /* 记下来供界面标注 */
   return CHANCE.baseDay;
 }
 /* 时间戳：非交易时段跑的时候，必须把「这次算的是哪个交易日」标出来 ——
