@@ -7674,7 +7674,7 @@ function pdDirCls(s){
 /* date='' 表示「最新期」；idx = 服务器给的期次列表；type 用原名（'0'=全部机构）；
    hcode = 当前展开跨期明细的股票代码（点行展开 / 再点收起）；
    gen = 代次，切页签/换口径时 +1，让在途请求的结果作废（不换代次会把旧数据画到新界面上） */
-const INST={type:'0', date:'', q:'', ind:'', sk:'nOrg', sd:-1, busy:false, limit:100, objs:null, inds:null, idx:null, idxAt:0, hcode:'', gen:0, pack:null};
+const INST={type:'0', date:'', q:'', ind:'', sk:'nOrg', sd:-1, busy:false, limit:100, objs:null, inds:null, idx:null, idxAt:0, hcode:'', gen:0, pack:null, prevMap:null, prevKey:'', listMap:null};
 const INST_MEM={};        /* type → 已拉到的整包（会话内缓存；Worker 侧另有 6 小时边缘缓存） */
 const INST_TYPES=[['0','全部机构'],['1','基金'],['2','QFII'],['3','社保'],['4','券商'],['5','保险'],['6','信托']];
 /* 每类机构的口径说明：切类型时跟着换 —— 免得把「基金家数」读成「所有机构家数」 */
@@ -7704,6 +7704,96 @@ function instSlim(x){
   return [x.SECURITY_CODE,x.SECURITY_NAME_ABBR,x.HOULD_NUM||0,Math.round(x.HOLD_VALUE||0),
     Math.round((x.FREESHARES_RATIO||0)*100)/100,Math.round((x.TOTALSHARES_RATIO||0)*100)/100,
     x.HOLDCHA_NUM||0,Math.round(x.HOLDCHA_VALUE||0)];
+}
+/* 取**上一期**的全市场机构家数，返回 {代码: 家数} 的 Map。
+   用于「较上期增减」列。东财 RPT_MAIN_ORGHOLD 没有「上期家数」字段（只有本期 HOULD_NUM），
+   所以要额外抓上一期的全市场（同样 12 页并行 ≈1 秒），只留 HOULD_NUM 做减法。
+   ⚠ 失败返回 null（不阻塞主流程，那一列显示「—」即可）。 */
+async function instPrevMap(prevDate,type){
+  if(!prevDate) return null;
+  try{
+    const p1=await fetchT(instRptUrl(type,prevDate,1),15000).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    if(!p1||!p1.success||!p1.result) return null;
+    const pages=Math.min(p1.result.pages||1,20);
+    let rows=(p1.result.data||[]).slice();
+    if(pages>1){
+      const tasks=[];
+      for(let n=2;n<=pages;n++){ tasks.push(fetchT(instRptUrl(type,prevDate,n),15000).then(function(r){ return r.json(); }).catch(function(){ return null; })); }
+      const got=await Promise.all(tasks);
+      for(let i=0;i<got.length;i++){ const g=got[i]; if(g&&g.result&&g.result.data) rows=rows.concat(g.result.data); }
+    }
+    const m={};
+    for(let i=0;i<rows.length;i++){ m[String(rows[i].SECURITY_CODE)]=+rows[i].HOULD_NUM||0; }
+    return Object.keys(m).length?m:null;
+  }catch(e){ return null; }
+}
+/* 确保 prevMap 对应当前期次：算出「上一期」日期，异步取全市场家数，取到后重绘那一列。
+   ⚠ 独立于 instLoad —— 从缓存加载（INST_MEM / localStorage）也会走到这里，保证列始终有值。 */
+function instEnsurePrev(){
+  /* ⚠ 用 INST.pack.d（当前已渲染的期次），而不是 INST.date —— 后者在从缓存加载时还是空串，
+     会导致这里提前 return、prevMap 永远取不到、「较上期增减」整列显示「—」。 */
+  const dt=INST.pack?INST.pack.d:INST.date; if(!dt) return;
+  const pk=INST.type+'|'+dt;
+  const go=function(){
+    const L=INST.idx||[];
+    let prevDate='';
+    for(let i=0;i<L.length;i++){ if(L[i].d===dt && i+1<L.length){ prevDate=L[i+1].d; break; } }
+    if(!prevDate) return;                /* 最早一期没有「上一期」→ 整列显示「—」 */
+    instPrevMap(prevDate,INST.type).then(function(m){
+      /* 期次/类型没变才采纳（异步期间用户可能切走了） */
+      if(INST.prevKey===pk){
+        INST.prevMap=m;
+        /* ⚠ 必须清掉 objs 缓存 —— instPrep 第一次算时 prevMap 还是 null，
+           nOrgChg 全是 null 且已缓存进 INST.objs；不清掉的话重绘时直接复用旧对象，
+           「较上期增减」列永远显示「—」。 */
+        INST.objs=null;
+        instPaint();
+      }
+    });
+  };
+  /* idx（期次列表）可能还没加载（从缓存直接渲染时）→ 先取 idx 再算上一期 */
+  if(INST.idx&&INST.idx.length){ go(); }
+  else { instLoadIdx().then(go).catch(function(){}); }
+}
+/* 取**最近 400 天内上市**的股票上市日期，返回 {代码: 上市日期} 的 Map。
+   用于给次新股（上市不满 1 年）名字前加标记。东财 RPT_F10_BASIC_ORGINFO 有 LISTING_DATE 字段，
+   按 LISTING_DATE 降序只要抓前几页（近端上市的），不用抓全市场 2.4 万只。
+   ⚠ 失败返回 null（不阻塞主流程，只是不加标记）。 */
+async function instListDate(){
+  try{
+    const RT='https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_F10_BASIC_ORGINFO';
+    const cols='&columns=SECURITY_CODE,LISTING_DATE&pageNumber=1&pageSize=500&sortColumns=LISTING_DATE&sortTypes=-1&source=WEB&client=WEB';
+    const p1=await fetchT(RT+cols,15000).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    if(!p1||!p1.success||!p1.result) return null;
+    /* 只抓前 2 页（最近 1000 只新上市的），覆盖上市 1 年内绰绰有余 */
+    const pages=Math.min(p1.result.pages||1,2);
+    let rows=(p1.result.data||[]).slice();
+    if(pages>1){
+      const p2=await fetchT(RT+'&columns=SECURITY_CODE,LISTING_DATE&pageNumber=2&pageSize=500&sortColumns=LISTING_DATE&sortTypes=-1&source=WEB&client=WEB',15000).then(function(r){ return r.json(); }).catch(function(){ return null; });
+      if(p2&&p2.result&&p2.result.data) rows=rows.concat(p2.result.data);
+    }
+    const cutoff=Date.now()-365*24*3600*1000;   /* 上市不满 1 年 */
+    const m={};
+    for(let i=0;i<rows.length;i++){
+      const d=String(rows[i].LISTING_DATE||'').slice(0,10);
+      if(!d) continue;
+      if(new Date(d).getTime()<cutoff) continue;   /* 超过 1 年的跳过 */
+      m[String(rows[i].SECURITY_CODE)]=d;
+    }
+    return Object.keys(m).length?m:null;
+  }catch(e){ return null; }
+}
+/* 确保 listMap（上市日期映射）已取：异步抓近端次新，取到后清 objs 缓存重绘。
+   ⚠ 上市日期和期次/类型无关，取一次就够了 —— 用 listMap 是否已取过判断，不用每次切期重抓。 */
+function instEnsureList(){
+  if(INST.listMap) return;              /* 已取过（含失败置 null 后不再重试的场景由下面控制） */
+  if(INST._listTried) return;
+  INST._listTried=true;
+  instListDate().then(function(m){
+    INST.listMap=m;
+    INST.objs=null;                     /* 清缓存，让 instPrep 用新 listMap 重算 isNew */
+    instPaint();
+  });
 }
 /* 代码 → SEC_MAP 的键（那张申万二级表用的是 600519.SH 这种带后缀格式） */
 function instSym(c){
@@ -7951,6 +8041,11 @@ function instFillPeriods(){
 function instRender(j){
   INST.pack=j;                           /* ⚠ 必须存下来 —— instPrep 从这里取整包 */
   INST.objs=null; INST.inds=null;        /* 换了整包 → 派生数据全部重建 */
+  /* 上一期家数 Map 要跟着「类型|期次」走：变了就作废，异步重取。
+     ⚠ 用 prevKey（type|date）判断，而不是只判 date —— 切类型时 date 不变但 prevMap 必须作废。 */
+  const pk=INST.type+'|'+j.d;
+  if(INST.prevKey!==pk){ INST.prevMap=null; INST.prevKey=pk; instEnsurePrev(); }
+  instEnsureList();                       /* 次新股上市日期映射（取一次，期次/类型无关） */
   const cards=document.getElementById('instCards');
   if(cards){
     const IT=j.items||[];
@@ -7990,13 +8085,21 @@ function instPrep(){
      INST_MEM 的键是「类型|期次」，用类型直接索引永远取不到 → 表格空白
      （2026-10-15 用户报「数据出不来」的成因之一，卡片能渲染、表格却一行都没有）。 */
   const j=INST.pack; if(!j||!j.items) return null;
+  const pm=INST.prevMap;
+  const lm=INST.listMap;
   INST.objs=j.items.map(function(it){
     const nOrg=+it[2]||0, val=(+it[3]||0)/1e8;
     /* avg = 户均持仓（万元）。⚠ 这个字段是**识别噪音的关键**：次新股上市时几千家基金
        打新各拿几百股，机构家数能上 3000+，但户均只有一两万元 —— 那不是「机构重仓」。 */
+    /* nOrgChg = 本期家数 − 上一期家数（没有上一期数据则为 null，排序时沉底） */
+    const pv=pm?(pm[String(it[0])]):null;
+    /* isNew = 是否次新股（上市不满 1 年），listDate 为上市日期 */
+    const listDate=lm?(lm[String(it[0])]||''):'';
     return {code:String(it[0]), name:String(it[1]), nOrg:nOrg, val:val,
       avg:nOrg>0?(val*1e4/nOrg):0, ind:instInd(it[0]),
-      fr:+it[4]||0, tr:+it[5]||0, cha:(+it[6]||0)/1e4, chav:(+it[7]||0)/1e8};
+      fr:+it[4]||0, tr:+it[5]||0, cha:(+it[6]||0)/1e4, chav:(+it[7]||0)/1e8,
+      nOrgChg:(pv==null?null:(nOrg-pv)),
+      isNew:!!listDate, listDate:listDate};
   });
   return INST.objs;
 }
@@ -8030,7 +8133,7 @@ function instPaint(){
   const total=rows.length;
   rows=snapSort(rows,INST,'name');
   /* 行业列**故意不给排序键**（snapSort 只认数字和 name 列，给 ind 会全部沉底） */
-  const COLS=[{k:'name',t:'股票',lft:1},{t:'行业',lft:1},{k:'nOrg',t:'机构家数'},
+  const COLS=[{k:'name',t:'股票',lft:1},{t:'行业',lft:1},{k:'nOrgChg',t:'较上期增减'},{k:'nOrg',t:'机构家数'},
     {k:'avg',t:'户均(万元)'},
     {k:'val',t:'持股市值(亿)'},{k:'fr',t:'占流通(%)'},{k:'tr',t:'占总股本(%)'},
     {k:'cha',t:'持股变动(万股)'},{k:'chav',t:'变动市值(亿)'}];
@@ -8049,15 +8152,25 @@ function instPaint(){
         const avgH=(o.avg>0&&o.avg<100)
           ? '<span style="opacity:.42" title="户均不足 100 万元，多为打新 / 指数被动持有的零头">'+at+'</span>'
           : at;
+        /* 较上期增减：红增绿减（A股口径），没有上一期数据则「—」 */
+        const chg=o.nOrgChg;
+        const chgH=(chg==null)
+          ? '<span style="opacity:.4">—</span>'
+          : '<span class="'+FCLS(chg)+'">'+(chg>0?'+':'')+chg+'</span>';
+        /* 次新股标记：名字前加黄色「次」小标签，悬停显示上市日期 */
+        const newTag=o.isNew
+          ? '<span style="display:inline-block;background:#d4a017;color:#fff;font-size:11px;line-height:1;padding:2px 4px;border-radius:3px;margin-right:4px;font-weight:bold" title="次新股 · 上市 '+ces(o.listDate)+'">次</span>'
+          : '';
         return '<tr data-c="'+ces(o.code)+'" data-n="'+ces(o.name)+'" style="cursor:pointer" title="点这行看它跨报告期的变化">'
-          +'<td class="lft"><b>'+ces(o.name)+'</b> <span style="opacity:.45">'+ces(o.code)+'</span></td>'
+          +'<td class="lft">'+newTag+'<b>'+ces(o.name)+'</b> <span style="opacity:.45">'+ces(o.code)+'</span></td>'
           +'<td class="lft">'+(o.ind?ces(o.ind):'—')+'</td>'
+          +'<td>'+chgH+'</td>'
           +'<td>'+o.nOrg+'</td><td>'+avgH+'</td>'
           +'<td>'+o.val.toFixed(2)+'</td><td>'+o.fr.toFixed(2)+'</td><td>'+o.tr.toFixed(2)+'</td>'
           +'<td class="'+FCLS(cha)+'">'+(cha>0?'+':'')+cha.toFixed(0)+'</td>'
           +'<td class="'+FCLS(chav)+'">'+(chav>0?'+':'')+chav.toFixed(2)+'</td>'
           +'</tr>';
-      }).join('') : '<tr><td colspan="9" class="lft" style="padding:14px;opacity:.6">没有匹配的标的 —— 换个关键词或行业试试</td></tr>')
+      }).join('') : '<tr><td colspan="10" class="lft" style="padding:14px;opacity:.6">没有匹配的标的 —— 换个关键词或行业试试</td></tr>')
     +'</tbody></table></div>'
     +(total>show.length
       ? '<div class="inst-more"><button class="btn secondary" id="instMore">显示更多（已显示 '+show.length+' / '+total+'）</button></div>'
