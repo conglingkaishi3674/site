@@ -2,7 +2,7 @@
    策略：缓存优先（Cache First），命中缓存立即返回，后台静默更新。
    只缓存静态骨架（index.html / echarts / 图标 / manifest），
    不缓存任何 /v1/* 动态数据接口（行情必须实时）。 */
-const CACHE = 'pwa-v1';
+const CACHE = 'pwa-v2';
 const STATIC = ['/', '/index.html', '/echarts.min.js', '/icon-192.png', '/icon-512.png', '/manifest.json'];
 
 self.addEventListener('install', function (e) {
