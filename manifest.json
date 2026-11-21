@@ -1,6 +1,6 @@
 {
-  "name": "盘中信息台",
-  "short_name": "盘中信息台",
+  "name": "從零开始",
+  "short_name": "從零开始",
   "description": "A股行情看板 · 选股 · 消息面",
   "start_url": "/",
   "scope": "/",
