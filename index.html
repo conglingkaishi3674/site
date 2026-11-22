@@ -1135,30 +1135,30 @@
     padding:0; border-left:none; border-top:1px solid var(--line);
     background:rgba(26,28,32,.96); backdrop-filter:blur(12px);
     z-index:80;
+    /* iPhone 底部安全区（home indicator）留白 */
+    padding-bottom:env(safe-area-inset-bottom, 0);
   }
   .sidebar .sb-top{display:none}
   .sidebar .sb-toggle{display:none}
   .sidebar .sb-nav{flex-direction:row; gap:0; align-items:stretch; padding:0}
   .sidebar .sb-item{
-    flex:1 1 0; min-width:0; width:auto; min-height:56px; padding:6px 2px;
-    flex-direction:column; justify-content:center; gap:3px; text-align:center;
+    flex:1 1 0; min-width:0; width:auto; min-height:54px; padding:8px 2px;
+    flex-direction:column; justify-content:center; gap:0; text-align:center;
     border:none; border-radius:0; background:transparent;
   }
-  .sidebar .sb-item .sb-ico{flex:none; font-size:18px; line-height:1}
-  .sidebar .sb-item .sb-txt{flex-direction:column; gap:1px}
-  .sidebar .sb-item .sb-txt b{font-size:10.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
-  .sidebar .sb-item .sb-txt i{display:none}
-  .sidebar .sb-item:hover{background:rgba(255,255,255,.05); transform:none}
-  .sidebar .sb-item.active{background:transparent}
+  /* 纯图标：文字整个隐藏，只留图标居中放大 */
+  .sidebar .sb-item .sb-ico{flex:none; font-size:22px; line-height:1}
+  .sidebar .sb-item .sb-txt{display:none}
+  .sidebar .sb-item:hover{background:rgba(255,255,255,.06); transform:none}
+  .sidebar .sb-item.active{background:rgba(255,217,94,.10)}
   .sidebar .sb-item.active .sb-ico{transform:translateY(-1px)}
-  .sidebar .sb-item.active .sb-txt b{color:#ffd95e}
   /* 底部导航：只显示 5 个主页签 + 更多，其余隐藏（由"更多"菜单承载）*/
   .sidebar .sb-item[data-tab="watch"],
   .sidebar .sb-item[data-tab="pick"],
   .sidebar .sb-item[data-tab="soon"],
   .sidebar .sb-item[data-tab="lowrisk"]{ display:none }
   /* 主内容区底部让位给底部导航栏 */
-  .app{ padding-bottom:78px }
+  .app{ padding-bottom:76px }
   /* 数据浏览的子模块 tab：横向可滚动，不换行（9 个子模块一行滑） */
   .db-tabs{ flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px; scrollbar-width:none }
   .db-tabs::-webkit-scrollbar{ display:none }
