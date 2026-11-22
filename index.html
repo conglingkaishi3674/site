@@ -1163,6 +1163,7 @@
 <body>
 <script>
 /* PWA 环境检测：iOS 用 navigator.standalone，安卓用 display-mode:standalone。
+   另支持 URL 参数 ?app=1 强制触发（APK 的 WebView 加载时带上，用于 App 内显示底部导航）。
    统一给 body 加 .pwa-mode 类，驱动底部导航 CSS。
    放在 body 最前，避免渲染时先闪一下顶部导航再切底部。 */
 (function () {
@@ -1170,6 +1171,7 @@
     var pwa = false;
     if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) pwa = true;
     if (navigator.standalone === true) pwa = true;
+    if (/(\?|&)app=1(&|$)/.test(location.search)) pwa = true;
     if (pwa) document.body.className = (document.body.className ? document.body.className + ' ' : '') + 'pwa-mode';
   } catch (e) {}
 })();
