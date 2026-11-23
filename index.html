@@ -7000,8 +7000,9 @@ function sectorRender(j){
 }
 function mktRender(j){
   const box=document.getElementById('dbBody'); if(!box) return;
-  const t=j.turnover||[], hs=j.hsgt||[], top=j.top50||[], f=j.flow;
+  const t=j.turnover||[], hs=j.hsgt||[], top=j.top50||[], f=j.flow, mg=j.margin||[];
   const lastT=t.length?t[t.length-1]:null, lastHs=hs.length?hs[hs.length-1]:null;
+  const lastMg=mg.length?mg[mg.length-1]:null;
   const vals=t.map(function(x){return x[3];}).filter(function(v){return v!=null;});
   const avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:0;
   const mx=vals.length?Math.max.apply(null,vals):0, mn=vals.length?Math.min.apply(null,vals):0;
@@ -7015,12 +7016,14 @@ function mktRender(j){
         '沪 '+(lastT?lastT[1].toFixed(0):'—')+' 亿 · 深 '+(lastT?(lastT[2]==null?'—':lastT[2].toFixed(0)):'—')+' 亿', cur)
     + dbCard('近一年分位', pctile+'%',
         '区间 '+mn.toFixed(0)+' ~ '+mx.toFixed(0)+' 亿 · 均值 '+avg.toFixed(0)+' 亿', cur-avg)
+    + dbCard('两融余额', lastMg?lastMg[3].toFixed(0)+' 亿':'—',
+        '融资 '+(lastMg?lastMg[1].toFixed(0):'—')+' 亿 · 融券 '+(lastMg?lastMg[2].toFixed(0):'—')+' 亿', lastMg?lastMg[3]:0)
     + dbCard('北向成交额', lastHs?lastHs[1].toLocaleString()+' 亿':'—', '沪深港通 · 买+卖 合计', lastHs?lastHs[1]:0)
     + dbCard('南向成交额', lastHs?lastHs[2].toLocaleString()+' 亿':'—', '港股通 · 买+卖 合计', lastHs?lastHs[2]:0)
     + '</div>';
 
-  h+='<div class="panel"><h3>近一年两市成交额</h3>'
-    + '<p class="panel-sub">沪市 + 深市合计（亿元）。<span style="color:#ffb85c">虚线是近一年均值</span> —— 当前量能在这条线之上还是之下，比绝对数字更能说明问题。</p>'
+  h+='<div class="panel"><h3>近一年两市成交额 + 两融余额</h3>'
+    + '<p class="panel-sub">蓝线=两市成交额（左轴，亿元），<span style="color:#ffb85c">虚线是近一年均值</span>；<span style="color:#ff6f83">红线=两融余额</span>（右轴，亿元，融资+融券沪深合计）—— 看杠杆资金与量能是否同向。</p>'
     + '<div id="mktChart1" class="mkt-chart" style="height:260px"></div></div>';
 
   h+='<div class="panel"><h3>近一年北向 / 南向成交额</h3>'
@@ -7112,13 +7115,13 @@ function mktRender(j){
   if(pInflow||pTop) h+='<div class="mkt-cols">'+pInflow+pTop+'</div>';
 
   box.innerHTML=h;
-  drawMktCharts(t,hs,avg);
+  drawMktCharts(t,hs,mg,avg);
   /* 点前 50 / 北向十大里的标的 → 跳到个股盯盘看 K 线 */
   box.querySelectorAll('.mkt-stk').forEach(function(el){
     el.onclick=function(){ openInStock(el.getAttribute('data-nm'), el.getAttribute('data-code')); };
   });
 }
-function drawMktCharts(t,hs,avg){
+function drawMktCharts(t,hs,mg,avg){
   /* ECharts 有 1MB，是**懒加载**的（见 ensureECharts）：不走个股盯盘/选股器就直接进「数据浏览」时，
      它还没下载。原来这里写 `if(!window.echarts) return;` —— 静默返回，页面只剩标题，看着就像功能坏了。
      所以改成：先摆一块看得见的提示，引擎就绪后自动补画。 */
@@ -7132,30 +7135,44 @@ function drawMktCharts(t,hs,avg){
   [d1,d2].forEach(function(el){ if(el) el.innerHTML=''; });   /* 清掉提示块，免得盖住画布 */
   const AX={axisLine:{lineStyle:{color:'rgba(255,255,255,.26)'}},axisLabel:{color:'#a5abb4',fontSize:10},axisTick:{show:false}};
   const GY={type:'category',boundaryGap:false};
-  /* ① 两市成交额 + 均值线 */
+  /* ① 两市成交额 + 两融余额（右轴） + 均值线 */
   if(d1){
     if(_mktInst1){ try{_mktInst1.dispose();}catch(e){} }
     _mktInst1=echarts.init(d1,null,{renderer:'canvas'});
+    /* 两融余额按日期对齐到成交额的横轴（两融更新可能比行情晚一天，缺的日期补 null） */
+    const mgMap={}; (mg||[]).forEach(function(x){ mgMap[x[0]]=x; });
+    const mgVals=t.map(function(x){ const m=mgMap[x[0]]; return m?m[3]:null; });
+    const mgRz=t.map(function(x){ const m=mgMap[x[0]]; return m?m[1]:null; });
+    const mgRq=t.map(function(x){ const m=mgMap[x[0]]; return m?m[2]:null; });
     _mktInst1.setOption({
       animation:false, backgroundColor:'transparent',
-      grid:{left:64,right:14,top:14,bottom:26},
+      grid:{left:64,right:64,top:14,bottom:26},
       tooltip:{trigger:'axis',backgroundColor:'rgba(30,32,37,.96)',borderColor:'rgba(255,255,255,.24)',
         textStyle:{color:'#e9ebef',fontSize:12}, formatter:function(ps){
           if(!ps||!ps.length) return '';
           const i=ps[0].dataIndex, x=t[i];
-          return x[0].slice(0,4)+'-'+x[0].slice(4,6)+'-'+x[0].slice(6,8)
+          let s=x[0].slice(0,4)+'-'+x[0].slice(4,6)+'-'+x[0].slice(6,8)
             +'<br>沪 '+x[1].toFixed(0)+' 亿　深 '+(x[2]==null?'—':x[2].toFixed(0)+' 亿')
             +'<br><b>合计 '+(x[3]==null?'—':x[3].toFixed(0)+' 亿')+'</b>';
+          if(mgVals[i]!=null) s+='<br><span style="color:#ff6f83">两融余额 '+(+mgVals[i]).toFixed(0)+' 亿</span>'
+            +'<br><span style="color:#ff6f83">　融资 '+(+mgRz[i]).toFixed(0)+' 亿 · 融券 '+(+mgRq[i]).toFixed(0)+' 亿</span>';
+          return s;
         }},
       xAxis:Object.assign({},GY,{data:t.map(function(x){return x[0].slice(4,6)+'-'+x[0].slice(6,8);}),axisLabel:{color:'#a5abb4',fontSize:10,interval:Math.max(1,Math.floor(t.length/10))}}),
-      yAxis:Object.assign({},AX,{type:'value',scale:true,splitLine:{lineStyle:{color:'rgba(255,255,255,.07)'}},
-        axisLabel:{color:'#a5abb4',fontSize:10,formatter:function(v){return Math.round(v)+'亿';}}}),
+      yAxis:[
+        Object.assign({},AX,{type:'value',scale:true,splitLine:{lineStyle:{color:'rgba(255,255,255,.07)'}},
+          axisLabel:{color:'#a5abb4',fontSize:10,formatter:function(v){return Math.round(v)+'亿';}}}),
+        Object.assign({},AX,{type:'value',scale:true,splitLine:{show:false},
+          axisLabel:{color:'#ff6f83',fontSize:10,formatter:function(v){return Math.round(v)+'亿';}}})
+      ],
       series:[
-        {type:'line', name:'两市成交额', data:t.map(function(x){return x[3];}), showSymbol:false, smooth:false,
+        {type:'line', name:'两市成交额', data:t.map(function(x){return x[3];}), yAxisIndex:0, showSymbol:false, smooth:false,
          lineStyle:{color:'#5fa8ff',width:1.4},
          areaStyle:{color:'rgba(95,168,255,.12)'},
          markLine:{silent:true,symbol:'none',label:{formatter:'近一年均值',color:'#ffb85c',fontSize:10,position:'insideEndTop'},
-           data:[{yAxis:+avg.toFixed(0),lineStyle:{color:'#ffb85c',type:'dashed',width:1}}]}}
+           data:[{yAxis:+avg.toFixed(0),lineStyle:{color:'#ffb85c',type:'dashed',width:1}}]}},
+        {type:'line', name:'两融余额', data:mgVals, yAxisIndex:1, showSymbol:false, smooth:false,
+         lineStyle:{color:'#ff6f83',width:1.2}}
       ]
     });
   }
